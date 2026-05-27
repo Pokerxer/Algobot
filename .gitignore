@@ -1,0 +1,14 @@
+.worktrees/
+.agents/
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+htmlcov/
+.env
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+.DS_Store
