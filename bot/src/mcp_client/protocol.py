@@ -1,0 +1,6 @@
+from typing import Any, Protocol
+
+
+class MCPClient(Protocol):
+    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any: ...
+    async def close(self) -> None: ...
