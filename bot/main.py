@@ -4,6 +4,7 @@ import os
 import signal
 from pathlib import Path
 from supabase import create_client
+from src.ai.validator import AIValidator
 from src.bot import TradingBot
 from src.config.loader import load_config
 from src.db.supabase_client import SupabaseLogger
@@ -29,7 +30,8 @@ async def main():
     await mcp.connect()
     log.info("MCP connected")
 
-    bot = TradingBot(config=config, mcp=mcp, supabase_logger=db_logger)
+    ai_validator = AIValidator(config.ai) if config.ai.enabled else None
+    bot = TradingBot(config=config, mcp=mcp, supabase_logger=db_logger, ai_validator=ai_validator)
     shutdown = asyncio.Event()
 
     loop = asyncio.get_running_loop()

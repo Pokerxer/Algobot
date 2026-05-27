@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "MT5 agentic trading bot — regime-adaptive multi-strategy engine"
 requires-python = ">=3.11"
 dependencies = [
+    "anthropic>=0.40",
     "mcp>=1.0",
     "supabase>=2.7",
     "pandas>=2.2",

@@ -1,4 +1,6 @@
 import logging
+from typing import Optional
+from src.ai.validator import AIValidator
 from src.config.schema import AppConfig
 from src.data.cache import OHLCVCache
 from src.data.fetcher import DataFetcher
@@ -17,10 +19,12 @@ log = logging.getLogger(__name__)
 
 
 class TradingBot:
-    def __init__(self, config: AppConfig, mcp: MCPClient, supabase_logger):
+    def __init__(self, config: AppConfig, mcp: MCPClient, supabase_logger,
+                 ai_validator: Optional[AIValidator] = None):
         self._cfg = config
         self._mcp = mcp
         self._db = supabase_logger
+        self._ai = ai_validator
         self._cache = OHLCVCache()
         self._fetcher = DataFetcher(mcp, self._cache)
         self._regime = RegimeDetector(config.regime)
@@ -78,8 +82,27 @@ class TradingBot:
                 self._db.log_signal(signal, executed=False)
                 continue
 
+            ai_decision = None
+            if self._ai is not None:
+                ai_decision = await self._ai.validate(signal, state, balance)
+                if ai_decision.action == "VETO":
+                    log.info("AI vetoed signal for %s: %s", choice.instrument, ai_decision.reasoning)
+                    self._db.log_signal(signal, executed=False,
+                                        ai_decision="VETO", ai_reasoning=ai_decision.reasoning)
+                    continue
+                if ai_decision.action == "MODIFY":
+                    if ai_decision.stop_loss is not None:
+                        signal = signal.model_copy(update={"stop_loss": ai_decision.stop_loss})
+                    if ai_decision.take_profit is not None:
+                        signal = signal.model_copy(update={"take_profit": ai_decision.take_profit})
+                    log.info("AI modified SL/TP for %s: %s", choice.instrument, ai_decision.reasoning)
+
             result = await self._execution.place_order(signal, decision.lot_size)
-            self._db.log_signal(signal, executed=(result.status == "FILLED"))
+            self._db.log_signal(
+                signal, executed=(result.status == "FILLED"),
+                ai_decision=ai_decision.action if ai_decision else None,
+                ai_reasoning=ai_decision.reasoning if ai_decision else None,
+            )
             log.info("Order placed for %s: ticket=%s", choice.instrument, result.ticket)
 
     async def _compute_spread_ratios(self) -> dict[str, float]:
