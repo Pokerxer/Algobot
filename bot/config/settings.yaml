@@ -1,0 +1,40 @@
+account:
+  starting_balance: 500
+  max_daily_drawdown_pct: 5
+  max_concurrent_positions: 3
+  risk_per_trade_pct: 1
+
+instruments: [EURUSD, GBPUSD, USDJPY, XAUUSD, US500, NAS100, US30]
+
+timeframes:
+  regime: H1
+  entry: M15
+
+regime:
+  adx_period: 14
+  adx_trend_threshold: 25
+  adx_range_threshold: 20
+  bb_period: 20
+  bb_std: 2
+
+strategy:
+  momentum:
+    fast_ema: 20
+    slow_ema: 50
+    atr_stop_multiplier: 1.5
+    atr_target_multiplier: 3.0
+  mean_reversion:
+    rsi_period: 14
+    rsi_oversold: 30
+    rsi_overbought: 70
+
+ai:
+  enabled: false
+  confidence_threshold: 0.6
+  timeout_seconds: 30
+  max_calls_per_day: 50
+  model: claude-sonnet-4-6
+
+execution:
+  max_holding_hours: 24
+  max_spread_multiplier: 2.0
