@@ -1,0 +1,24 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0a0a0f;
+  --surface: #111118;
+  --border: #1e1e2e;
+  --text: #e2e2f0;
+  --muted: #6b6b8a;
+  --green: #22c55e;
+  --red: #ef4444;
+  --blue: #60a5fa;
+  --yellow: #facc15;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
