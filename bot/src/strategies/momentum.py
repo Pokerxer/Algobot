@@ -42,6 +42,7 @@ class MomentumStrategy(BaseStrategy):
                     instrument=regime.instrument, direction=Direction.BUY,
                     entry_price=close, stop_loss=stop, take_profit=target,
                     confidence=regime.confidence, regime=regime.regime, strategy=self.name,
+                    atr=atr_now,
                 )
 
         if regime.regime == Regime.TRENDING_DOWN and fast_now < slow_now:
@@ -54,6 +55,7 @@ class MomentumStrategy(BaseStrategy):
                     instrument=regime.instrument, direction=Direction.SELL,
                     entry_price=close, stop_loss=stop, take_profit=target,
                     confidence=regime.confidence, regime=regime.regime, strategy=self.name,
+                    atr=atr_now,
                 )
 
         return None

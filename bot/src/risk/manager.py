@@ -45,6 +45,11 @@ class RiskManager:
         stop_distance = abs(signal.entry_price - signal.stop_loss)
         if stop_distance <= 0:
             return RiskDecision(False, reason="Invalid stop distance")
+        if signal.atr is not None and signal.atr > 0:
+            if stop_distance < 0.8 * signal.atr:
+                return RiskDecision(False, reason=f"Stop too tight ({stop_distance:.5f} < 0.8×ATR={0.8*signal.atr:.5f})")
+            if stop_distance > 4.0 * signal.atr:
+                return RiskDecision(False, reason=f"Stop too wide ({stop_distance:.5f} > 4×ATR={4.0*signal.atr:.5f})")
         pip_distance = stop_distance * 10000
         lot_size = round(risk_amount / (pip_distance * self._pip_value), 2)
         if lot_size < 0.01:

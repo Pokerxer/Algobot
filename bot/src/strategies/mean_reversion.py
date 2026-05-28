@@ -38,6 +38,7 @@ class MeanReversionStrategy(BaseStrategy):
                 instrument=regime.instrument, direction=Direction.BUY,
                 entry_price=close, stop_loss=lower - atr_now, take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
+                atr=atr_now,
             )
 
         if close >= upper and rsi_now > self._cfg.rsi_overbought:
@@ -45,6 +46,7 @@ class MeanReversionStrategy(BaseStrategy):
                 instrument=regime.instrument, direction=Direction.SELL,
                 entry_price=close, stop_loss=upper + atr_now, take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
+                atr=atr_now,
             )
 
         return None

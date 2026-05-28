@@ -1,4 +1,5 @@
 from enum import Enum
+from typing import Optional
 from pydantic import BaseModel, Field, ConfigDict
 from src.models.regime import Regime
 
@@ -18,3 +19,4 @@ class Signal(BaseModel):
     confidence: float = Field(ge=0, le=1)
     regime: Regime
     strategy: str
+    atr: Optional[float] = None

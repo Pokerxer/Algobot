@@ -37,9 +37,11 @@ class TradingBot:
         self._risk = RiskManager(config.account)
         self._execution = ExecutionEngine(mcp)
         self._portfolio = PortfolioManager(mcp)
+        self._initial_sl: dict[int, float] = {}  # ticket → SL at entry, for R-multiple calcs
 
     async def run_cycle(self) -> None:
         await self._portfolio.sync()
+        await self._manage_stops()
         account = await self._mcp.call_tool("account_info", {})
         balance = float(account.get("balance", self._cfg.account.starting_balance))
 
@@ -103,7 +105,45 @@ class TradingBot:
                 ai_decision=ai_decision.action if ai_decision else None,
                 ai_reasoning=ai_decision.reasoning if ai_decision else None,
             )
+            if result.status == "FILLED" and result.ticket is not None:
+                self._initial_sl[result.ticket] = signal.stop_loss
             log.info("Order placed for %s: ticket=%s", choice.instrument, result.ticket)
+
+    async def _manage_stops(self) -> None:
+        alive = {p.ticket for p in self._portfolio.positions}
+        self._initial_sl = {t: sl for t, sl in self._initial_sl.items() if t in alive}
+
+        for pos in self._portfolio.positions:
+            if pos.ticket not in self._initial_sl or pos.current_price is None:
+                continue
+            initial_sl = self._initial_sl[pos.ticket]
+            risk = round(abs(pos.entry_price - initial_sl), 8)
+            if risk <= 0:
+                continue
+
+            new_sl: float | None = None
+            if pos.direction.value == "BUY":
+                move = round(pos.current_price - pos.entry_price, 8)
+                if move >= 2 * risk:
+                    candidate = round(pos.current_price - risk, 5)
+                    if pos.stop_loss is None or candidate > pos.stop_loss:
+                        new_sl = candidate
+                elif move >= risk:
+                    if pos.stop_loss is None or pos.stop_loss < pos.entry_price:
+                        new_sl = pos.entry_price
+            else:
+                move = round(pos.entry_price - pos.current_price, 8)
+                if move >= 2 * risk:
+                    candidate = round(pos.current_price + risk, 5)
+                    if pos.stop_loss is None or candidate < pos.stop_loss:
+                        new_sl = candidate
+                elif move >= risk:
+                    if pos.stop_loss is None or pos.stop_loss > pos.entry_price:
+                        new_sl = pos.entry_price
+
+            if new_sl is not None:
+                await self._execution.modify_position(pos.ticket, stop_loss=new_sl)
+                log.info("Stop updated ticket=%s new_sl=%.5f", pos.ticket, new_sl)
 
     async def _compute_spread_ratios(self) -> dict[str, float]:
         ratios = {}
