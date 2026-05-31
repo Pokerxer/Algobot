@@ -241,6 +241,8 @@ class TradingBot:
         lb_pairs = set(self._cfg.strategy.london_breakout.pairs)
         lb_states = [s for s in regime_states if s.instrument in lb_pairs]
         for state in lb_states:
+            if not self._in_session(state.instrument):
+                continue
             lb_df = await self._fetcher.fetch_ohlcv(
                 state.instrument, self._cfg.timeframes.entry, bars=200,
             )
@@ -288,6 +290,8 @@ class TradingBot:
                             signal = signal.model_copy(
                                 update={"take_profit": ai_decision.take_profit}
                             )
+                        log.info("AI modified LB SL/TP for %s: %s",
+                                 state.instrument, ai_decision.reasoning)
                 result = await self._execution.place_order(signal, decision.lot_size)
                 self._db.log_signal(
                     signal,
