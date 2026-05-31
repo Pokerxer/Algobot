@@ -123,6 +123,16 @@ def test_tp_is_range_times_multiplier_on_buy():
     assert abs(sig.take_profit - expected) < 1e-6
 
 
+def test_tp_is_range_times_multiplier_on_sell():
+    asian_high, asian_low, close = 1.0850, 1.0800, 1.0790
+    df = _make_df(last_bar_hour=8, last_close=close,
+                  asian_high=asian_high, asian_low=asian_low)
+    sig = _strat().generate_signal(df, _regime())
+    assert sig is not None
+    expected = close - (asian_high - asian_low) * 1.5
+    assert abs(sig.take_profit - expected) < 1e-6
+
+
 # Meta
 
 def test_strategy_name():

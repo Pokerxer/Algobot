@@ -173,3 +173,67 @@ def test_parallel_strategies_contains_london_breakout():
     bot = TradingBot(config=_config(), mcp=MagicMock(), supabase_logger=MagicMock())
     assert hasattr(bot, "_parallel_strategies")
     assert any(isinstance(s, LondonBreakoutStrategy) for s in bot._parallel_strategies)
+
+
+# ── London Breakout parallel pass integration ─────────────────────────────────
+
+def _lb_config():
+    """Config with EURUSDm in both instruments and london_breakout.pairs."""
+    from src.config.schema import StrategyConfig, LondonBreakoutStrategyConfig
+    strategy = StrategyConfig(
+        london_breakout=LondonBreakoutStrategyConfig(pairs=["EURUSDm"]),
+    )
+    return AppConfig(
+        account={"starting_balance": 1500},
+        instruments=["EURUSDm"],
+        strategy=strategy,
+    )
+
+
+def _lb_breakout_rates():
+    """M15 bars: 28 Asian session bars + 1 London bar triggering a BUY breakout.
+
+    Date: 2026-06-01.  Base Unix ts = 1748736000 (00:00 UTC).
+    Asian bars: 00:00–06:45 UTC (28 × 15-min = 7 h), high=1.0850, low=1.0800.
+    London bar: 08:00 UTC (ts = 1748736000 + 8*3600 = 1748764800), close=1.0870
+                (above asian_high 1.0850 → BUY signal).
+    """
+    BASE_TS = 1748736000          # 2026-06-01 00:00:00 UTC
+    STEP    = 900                 # 15 minutes in seconds
+    asian_bars = [
+        {
+            "time":        BASE_TS + i * STEP,
+            "open":        1.0825,
+            "high":        1.0850,
+            "low":         1.0800,
+            "close":       1.0825,
+            "tick_volume": 500,
+        }
+        for i in range(28)
+    ]
+    london_bar = {
+        "time":        BASE_TS + 8 * 3600,   # 1748764800 — 08:00 UTC
+        "open":        1.0855,
+        "high":        1.0875,
+        "low":         1.0850,
+        "close":       1.0870,               # above asian_high → BUY
+        "tick_volume": 800,
+    }
+    return asian_bars + [london_bar]
+
+
+@pytest.mark.asyncio
+async def test_lb_parallel_pass_calls_place_order():
+    """run_cycle LB parallel pass must call place_order when a breakout fires."""
+    rates = _lb_breakout_rates()
+    mcp = FakeMCPClient(responses={
+        "get_rates":      rates,
+        "get_positions":  [],
+        "account_info":   {"balance": 1500},
+        "get_symbol_info": {"spread": 1.0, "avg_spread": 1.0},
+        "place_order":    {"status": "FILLED", "ticket": 42, "filled_price": 1.0870},
+    })
+    bot = TradingBot(config=_lb_config(), mcp=mcp, supabase_logger=MagicMock())
+    await bot.run_cycle()
+    tool_names = [n for n, _ in mcp.calls]
+    assert "place_order" in tool_names
