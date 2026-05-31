@@ -1,10 +1,12 @@
 account:
-  starting_balance: 500
+  starting_balance: 1500
   max_daily_drawdown_pct: 5
-  max_concurrent_positions: 3
-  risk_per_trade_pct: 1
+  max_concurrent_positions: 5
+  risk_per_trade_pct: 1.5
 
-instruments: [EURUSD, GBPUSD, USDJPY, XAUUSD, US500, NAS100, US30]
+# US30m removed — 0.92 correlation with US500m wastes a concurrent-position slot
+# EURUSDm kept here but routed to mean-reversion only inside bot logic
+instruments: [EURUSDm, GBPUSDm, GBPJPYm, USDJPYm, XAUUSDm, US500m, USTECm, BTCUSDm, ETHUSDm]
 
 timeframes:
   regime: H1
@@ -12,7 +14,7 @@ timeframes:
 
 regime:
   adx_period: 14
-  adx_trend_threshold: 25
+  adx_trend_threshold: 33   # raised from 28 — only trade confirmed strong trends
   adx_range_threshold: 20
   bb_period: 20
   bb_std: 2
@@ -21,15 +23,32 @@ strategy:
   momentum:
     fast_ema: 20
     slow_ema: 50
-    atr_stop_multiplier: 1.5
-    atr_target_multiplier: 3.0
+    atr_stop_multiplier: 2.0    # 33% more room — fewer noise stop-outs
+    atr_target_multiplier: 4.0  # 2:1 R/R maintained with wider stop
+    rsi_period: 14
+    rsi_midline: 40.0           # allows genuine pullback entries (RSI 40–60 zone)
+
   mean_reversion:
     rsi_period: 14
-    rsi_oversold: 30
-    rsi_overbought: 70
+    rsi_oversold: 28            # relaxed from 25 — catches real oversold bounces without adding noise
+    rsi_overbought: 72          # relaxed from 75
+    bb_std: 1.5                 # tighter than default 2.0 — EURUSD range is narrow, 1.5 hits band more reliably
+    require_double_touch: true  # second band touch before entering
+    require_divergence: true    # RSI must be less oversold at second touch (momentum exhaustion)
+    bb_expansion_filter: true   # skip if bands are widening (volatility spike)
+
+  london_breakout:
+    session_start_utc: 7
+    session_end_utc: 10
+    tp_multiplier: 1.5
+    min_range_pips: 10.0
+    pairs:
+      - EURUSDm
+      - GBPUSDm
+      - USDJPYm
 
 ai:
-  enabled: false
+  enabled: true
   confidence_threshold: 0.6
   timeout_seconds: 30
   max_calls_per_day: 50
