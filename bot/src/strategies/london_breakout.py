@@ -23,6 +23,9 @@ class LondonBreakoutStrategy(BaseStrategy):
         if not isinstance(df.index, pd.DatetimeIndex):
             return None
 
+        if len(df) == 0:
+            return None
+
         last_ts = df.index[-1]
         if last_ts.tzinfo is None:
             last_ts = last_ts.replace(tzinfo=timezone.utc)
@@ -34,7 +37,8 @@ class LondonBreakoutStrategy(BaseStrategy):
             return None
 
         today = last_ts.date()
-        asian_mask = (df.index.date == today) & (df.index.hour < self._cfg.session_start_utc)
+        idx_utc = df.index.tz_convert("UTC") if df.index.tz is not None else df.index
+        asian_mask = (idx_utc.date == today) & (idx_utc.hour < self._cfg.session_start_utc)
         df_asian = df[asian_mask]
 
         if len(df_asian) < 3:
