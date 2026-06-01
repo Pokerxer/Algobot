@@ -29,6 +29,7 @@ from src.regime.detector import RegimeDetector
 from src.regime.indicators import compute_atr
 from src.risk.manager import RiskManager
 from src.selection.instrument_selector import InstrumentSelector
+from src.insight.evaluator import evaluate
 from src.strategies.base import BaseStrategy
 _crumb("SRC_IMPORTS")
 from src.strategies.london_breakout import LondonBreakoutStrategy
@@ -121,6 +122,9 @@ class TradingBot:
             regime_states.append(state)
             self._db.snapshot_regime(state)
 
+        # Per-instrument evaluation for the Insight view (why did/didn't we signal)
+        await self._write_evaluations(regime_states)
+
         # Detect positions closed by MT5 (SL/TP hit) → write to trades table
         await self._detect_closed_trades()
 
@@ -154,16 +158,10 @@ class TradingBot:
             )
             state = next(s for s in regime_states if s.instrument == choice.instrument)
 
-            # Instrument routing: EUR is mean-reversion only — skip momentum signals.
-            # Allow both RANGING and CHOPPY: EURUSD often sits in ADX 20-33 (CHOPPY) during
-            # Asian/quiet hours where mean reversion still works on a naturally ranging pair.
-            if choice.instrument in _MEAN_REV_ONLY and state.regime in (
-                Regime.TRENDING_UP, Regime.TRENDING_DOWN
-            ):
-                continue
-
-            # High-ADR pairs are momentum only — skip mean reversion signals
-            if choice.instrument in _MOMENTUM_ONLY and state.regime == Regime.RANGING:
+            # Instrument routing: mean-reversion-only pairs (e.g. EURUSD) skip
+            # trending regimes; momentum-only high-ADR pairs skip ranging AND
+            # choppy regimes (both route to mean reversion). See _mandate_blocks.
+            if self._mandate_blocks(choice.instrument, state.regime):
                 continue
 
             # Split-session routing: XAUUSDm and US500m use different strategies
@@ -321,6 +319,30 @@ class TradingBot:
                 else:
                     log.warning("LB order REJECTED for %s: %s",
                                 state.instrument, result.error)
+
+    async def _write_evaluations(self, regime_states: list[RegimeState]) -> None:
+        for state in regime_states:
+            inst = state.instrument
+            try:
+                in_session = self._in_session(inst)
+                allowed = self._session_allowed_regimes(inst)
+                mtf = None
+                if state.regime in (Regime.TRENDING_UP, Regime.TRENDING_DOWN):
+                    direction = "BUY" if state.regime == Regime.TRENDING_UP else "SELL"
+                    mtf = (await self._h4_aligned(inst, direction)
+                           and await self._d1_aligned(inst, direction))
+                edf = await self._fetcher.fetch_ohlcv(
+                    inst, self._cfg.timeframes.entry, bars=200)
+                ev = evaluate(
+                    inst, state, edf, self._cfg,
+                    self._strategies.get(state.regime),
+                    in_session=in_session, allowed_regimes=allowed, mtf_aligned=mtf,
+                    is_mean_rev_only=inst in _MEAN_REV_ONLY,
+                    is_momentum_only=inst in _MOMENTUM_ONLY,
+                )
+                self._db.upsert_signal_evaluation(ev)
+            except Exception:
+                log.exception("Evaluation write failed for %s", inst)
 
     # ── closed trade detection ────────────────────────────────────────────────
 
@@ -680,6 +702,10 @@ class TradingBot:
         "EUR": (7,  21),   # London 07–16 + NY 13–21 (other EUR crosses)
         "GBPUSD": (7, 12), # London morning only — afternoon chop degrades signal quality
         "GBP": (7,  16),   # GBPJPYm: London + early NY (highest-ADR cross)
+        # USDJPY's quote currency is JPY, but prefix matching keys on the *base*
+        # currency, so it never matched the "JPY" rule below and fell through to
+        # the always-on default. Give it an explicit window matching JPY intent.
+        "USDJPY": (0, 20), # Tokyo 00–09 + London 07–16 + NY 13–20
         "JPY": (0,  20),   # Tokyo 00–09 + London 07–16 + NY 13–20
         "CHF": (7,  21),
         "CAD": (12, 21),   # NY session (CAD pairs move with NY)
@@ -710,7 +736,7 @@ class TradingBot:
         ],
         "US5": [
             (12, 14, frozenset({Regime.RANGING})),                           # Pre-market: mean reversion
-            (14, 17, frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})), # First 3h NYSE: momentum only
+            (14, 21, frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})), # NYSE session: momentum (matches the 12–21 session window)
         ],
         # Crypto: momentum only across all session hours.
         # No mean-reversion window — gap/news risk makes band-touch MR unreliable.
@@ -750,6 +776,26 @@ class TradingBot:
                         return allowed
                 return frozenset()  # in session window but between strategy bands
         return None  # no rule — all regimes permitted
+
+    @staticmethod
+    def _mandate_blocks(instrument: str, regime: Regime) -> bool:
+        """Return True if this instrument's strategy mandate forbids trading the
+        current regime.
+
+        EURUSD-style pairs are mean-reversion only — blocked in trending regimes.
+        High-ADR pairs are momentum only — blocked in BOTH ranging AND choppy
+        regimes, since the regime→strategy map routes RANGING *and* CHOPPY to mean
+        reversion, and these pairs must never emit a mean-reversion signal.
+        """
+        if instrument in _MEAN_REV_ONLY and regime in (
+            Regime.TRENDING_UP, Regime.TRENDING_DOWN
+        ):
+            return True
+        if instrument in _MOMENTUM_ONLY and regime in (
+            Regime.RANGING, Regime.CHOPPY
+        ):
+            return True
+        return False
 
     # ── signal dedup guard ────────────────────────────────────────────────────
 

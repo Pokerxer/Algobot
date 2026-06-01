@@ -245,6 +245,58 @@ def _lb_breakout_rates():
     return asian_bars + [london_bar]
 
 
+# ── Session windows & strategy-mandate gates ─────────────────────────────────
+
+from contextlib import contextmanager
+from unittest.mock import patch
+
+
+@contextmanager
+def _at_utc_hour(hour: int):
+    """Freeze datetime.now(timezone.utc) at the given UTC hour for session checks."""
+    frozen = datetime(2026, 6, 1, hour, 30, tzinfo=timezone.utc)
+    with patch("src.bot.datetime") as m:
+        m.now.return_value = frozen
+        yield
+
+
+def test_usdjpy_gated_after_jpy_window():
+    """USDJPYm must observe a real session window, not fall through to always-on.
+    21:00 UTC is past the Tokyo/London/NY window and must be gated."""
+    with _at_utc_hour(21):
+        assert TradingBot._in_session("USDJPYm") is False
+
+
+def test_us500_momentum_allowed_through_nyse_afternoon():
+    """US500m's momentum window must cover the full NYSE session (14–21 UTC),
+    not dead-end at 17:00 leaving 17–21 silently blocked."""
+    with _at_utc_hour(19):
+        allowed = TradingBot._session_allowed_regimes("US500m")
+    assert allowed == frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})
+
+
+def test_momentum_only_pair_blocked_in_choppy():
+    """Momentum-only pairs must not run mean reversion in CHOPPY (not just RANGING)."""
+    assert TradingBot._mandate_blocks("GBPUSDm", Regime.CHOPPY) is True
+
+
+def test_momentum_only_pair_blocked_in_ranging():
+    assert TradingBot._mandate_blocks("GBPUSDm", Regime.RANGING) is True
+
+
+def test_momentum_only_pair_allowed_when_trending():
+    assert TradingBot._mandate_blocks("GBPUSDm", Regime.TRENDING_UP) is False
+
+
+def test_mean_rev_only_pair_blocked_when_trending():
+    assert TradingBot._mandate_blocks("EURUSDm", Regime.TRENDING_DOWN) is True
+
+
+def test_mean_rev_only_pair_allowed_when_choppy():
+    """Mean-reversion-only pairs still trade CHOPPY (MR runs in RANGING + CHOPPY)."""
+    assert TradingBot._mandate_blocks("EURUSDm", Regime.CHOPPY) is False
+
+
 @pytest.mark.asyncio
 async def test_lb_parallel_pass_calls_place_order():
     """run_cycle LB parallel pass must call place_order when a breakout fires."""
@@ -260,3 +312,19 @@ async def test_lb_parallel_pass_calls_place_order():
     await bot.run_cycle()
     tool_names = [n for n, _ in mcp.calls]
     assert "place_order" in tool_names
+
+
+@pytest.mark.asyncio
+async def test_run_cycle_upserts_one_evaluation_per_instrument():
+    mcp = FakeMCPClient(responses={
+        "get_rates": _rates(), "get_positions": [],
+        "account_info": {"balance": 500},
+        "get_symbol_info": {"spread": 1.0, "avg_spread": 1.0},
+    })
+    supabase = MagicMock()
+    cfg = AppConfig(account={"starting_balance": 500},
+                    instruments=["EURUSD", "GBPUSD"])
+    await TradingBot(cfg, mcp, supabase).run_cycle()
+    evaluated = {c.args[0].instrument
+                 for c in supabase.upsert_signal_evaluation.call_args_list}
+    assert evaluated == {"EURUSD", "GBPUSD"}
