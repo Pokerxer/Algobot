@@ -17,7 +17,7 @@ export default function Nav() {
   const [time, setTime] = useState("")
 
   useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleTimeString("en-GB", { hour12: false }))
+    const tick = () => setTime(new Date().toLocaleTimeString("en-GB", { hour12: false, timeZone: "UTC" }))
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)

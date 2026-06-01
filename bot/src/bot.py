@@ -331,7 +331,9 @@ class TradingBot:
                     direction = "BUY" if state.regime == Regime.TRENDING_UP else "SELL"
                     mtf = (await self._h4_aligned(inst, direction)
                            and await self._d1_aligned(inst, direction))
-                edf = await self._fetcher.fetch_ohlcv(
+                # Skip OHLCV fetch for out-of-session instruments — evaluate() will
+                # gate them immediately and never use the data.
+                edf = None if not in_session else await self._fetcher.fetch_ohlcv(
                     inst, self._cfg.timeframes.entry, bars=200)
                 ev = evaluate(
                     inst, state, edf, self._cfg,
