@@ -206,6 +206,8 @@ class TradingBot:
                 if sr < 0.8:
                     log.debug("Spread compressed — skipping momentum entry: %s (%.2f×)",
                               choice.instrument, sr)
+                    self._db.log_signal(signal, executed=False,
+                                        rejection_reason=f"spread compressed ({sr:.2f}× baseline)")
                     continue
 
             decision = self._risk.evaluate(
@@ -217,7 +219,7 @@ class TradingBot:
             )
             if not decision.approved:
                 log.info("Signal rejected for %s: %s", choice.instrument, decision.reason)
-                self._db.log_signal(signal, executed=False)
+                self._db.log_signal(signal, executed=False, rejection_reason=decision.reason)
                 continue
 
             ai_decision = None
@@ -279,7 +281,7 @@ class TradingBot:
                 if not decision.approved:
                     log.info("LB signal rejected for %s: %s",
                              state.instrument, decision.reason)
-                    self._db.log_signal(signal, executed=False)
+                    self._db.log_signal(signal, executed=False, rejection_reason=decision.reason)
                     continue
                 ai_decision = None
                 if self._ai is not None:

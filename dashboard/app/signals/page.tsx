@@ -44,6 +44,7 @@ export default function SignalsPage() {
 
   const executed = signals.filter(s => s.executed).length
   const vetoed = signals.filter(s => s.ai_decision === "VETO").length
+  const rejected = signals.filter(s => !s.executed && !s.ai_decision && s.rejection_reason).length
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
@@ -53,13 +54,14 @@ export default function SignalsPage() {
         <span style={{ fontSize: "0.65rem", color: "var(--muted)" }}>{signals.length} evaluated</span>
         {executed > 0 && <span style={{ fontSize: "0.65rem", color: "var(--green)" }}>{executed} executed</span>}
         {vetoed > 0 && <span style={{ fontSize: "0.65rem", color: "var(--red)" }}>{vetoed} vetoed</span>}
+        {rejected > 0 && <span style={{ fontSize: "0.65rem", color: "var(--yellow)" }}>{rejected} rejected</span>}
       </div>
 
       <div style={{ background: "var(--panel)", border: "1px solid var(--border)", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ borderBottom: "1px solid var(--border)" }}>
-              {["TIME", "INSTRUMENT", "DIR", "CONFIDENCE", "REGIME", "STRATEGY", "AI DECISION", "REASONING", "EXEC"].map(h => (
+              {["TIME", "INSTRUMENT", "DIR", "CONFIDENCE", "REGIME", "STRATEGY", "AI DECISION", "REASON", "EXEC"].map(h => (
                 <th key={h} style={{
                   padding: "0.5rem 0.75rem", fontSize: "0.58rem", fontWeight: 500,
                   letterSpacing: "0.1em", color: "var(--muted)", textAlign: "left", whiteSpace: "nowrap",
@@ -106,9 +108,10 @@ export default function SignalsPage() {
                       >{s.ai_decision}</Pill>
                     ) : <span style={{ color: "var(--muted)" }}>—</span>}
                   </td>
-                  <td style={{ padding: "0.55rem 0.75rem", fontSize: "0.62rem", color: "var(--muted)", maxWidth: 260,
-                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {s.ai_reasoning ?? "—"}
+                  <td style={{ padding: "0.55rem 0.75rem", fontSize: "0.62rem", maxWidth: 280,
+                    overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                    color: s.ai_reasoning ? "var(--muted)" : s.rejection_reason ? "var(--yellow)" : "var(--dim)" }}>
+                    {s.ai_reasoning ?? s.rejection_reason ?? "—"}
                   </td>
                   <td style={{ padding: "0.55rem 0.75rem" }}>
                     {s.executed

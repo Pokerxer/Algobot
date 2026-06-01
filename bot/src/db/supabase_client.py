@@ -19,7 +19,8 @@ class SupabaseLogger:
 
     def log_signal(self, signal: Signal, executed: bool,
                    ai_decision: Optional[str] = None,
-                   ai_reasoning: Optional[str] = None) -> None:
+                   ai_reasoning: Optional[str] = None,
+                   rejection_reason: Optional[str] = None) -> None:
         self._safe_insert("signals", {
             "instrument": signal.instrument,
             "direction": signal.direction.value,
@@ -28,6 +29,7 @@ class SupabaseLogger:
             "strategy": signal.strategy,
             "ai_decision": ai_decision,
             "ai_reasoning": ai_reasoning,
+            "rejection_reason": rejection_reason,
             "executed": executed,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })

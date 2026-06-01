@@ -35,6 +35,7 @@ export interface Signal {
   strategy: string | null
   ai_decision: string | null
   ai_reasoning: string | null
+  rejection_reason: string | null
   executed: boolean
   created_at: string
 }
