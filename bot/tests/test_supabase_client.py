@@ -61,3 +61,17 @@ def test_delete_position_deletes_by_ticket():
     SupabaseLogger(client).delete_position(123)
     client.table.assert_called_with("positions")
     chain.delete.return_value.eq.assert_called_with("ticket", 123)
+
+
+def test_upsert_signal_evaluation_upserts_by_instrument():
+    from src.insight.evaluator import Evaluation
+    client, chain = _fake_client()
+    ev = Evaluation("EURUSDm", "RANGING", True, "mean_reversion",
+                    "no_setup", "price mid-band", 0.34, {"pct_b": 0.34})
+    SupabaseLogger(client).upsert_signal_evaluation(ev)
+    client.table.assert_called_with("signal_evaluations")
+    payload = chain.upsert.call_args[0][0]
+    assert payload["instrument"] == "EURUSDm"
+    assert payload["status"] == "no_setup"
+    assert payload["detail"] == {"pct_b": 0.34}
+    assert chain.upsert.call_args.kwargs["on_conflict"] == "instrument"

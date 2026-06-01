@@ -5,6 +5,7 @@ from typing import Any, Optional
 from src.models.position import Position
 from src.models.regime import RegimeState
 from src.models.signal import Signal
+from src.insight.evaluator import Evaluation
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,19 @@ class SupabaseLogger:
 
     def record_trade(self, **fields: Any) -> None:
         self._safe_insert("trades", fields)
+
+    def upsert_signal_evaluation(self, ev: Evaluation) -> None:
+        self._safe_upsert("signal_evaluations", {
+            "instrument": ev.instrument,
+            "regime": ev.regime,
+            "in_session": ev.in_session,
+            "strategy": ev.strategy,
+            "status": ev.status,
+            "reason": ev.reason,
+            "setup_distance": ev.setup_distance,
+            "detail": ev.detail,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }, on_conflict="instrument")
 
     def list_position_tickets(self) -> set[int]:
         """Tickets currently stored in the positions table.
