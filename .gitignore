@@ -12,3 +12,24 @@ venv/
 dist/
 build/
 .DS_Store
+
+# Runtime logs & temp files
+*.log
+*.err
+crumb.log
+mcp_out.txt
+mcp_err.txt
+*.txt
+.vscode/
+
+# Dashboard
+dashboard/dev.log
+dashboard/.next/
+
+# Throwaway scripts in bot root
+bot/test_*.py
+bot/patch_*.py
+bot/backtest_*.py
+bot/fh.txt
+bot/import_trace.txt
+bot/pd_trace.txt
