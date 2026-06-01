@@ -1,24 +1,84 @@
-@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&display=swap');
 
 :root {
-  --bg: #0a0a0f;
-  --surface: #111118;
-  --border: #1e1e2e;
-  --text: #e2e2f0;
-  --muted: #6b6b8a;
-  --green: #22c55e;
-  --red: #ef4444;
-  --blue: #60a5fa;
-  --yellow: #facc15;
+  --bg:           #09090C;
+  --surface:      #0D0D11;
+  --panel:        #111116;
+  --border:       #1A1A24;
+  --border-hi:    #2C2C3C;
+  --text:         #E2E2EE;
+  --sub:          #9090A8;
+  --muted:        #50506A;
+  --dim:          #282836;
+  --accent:       #C8A84B;
+  --accent-dim:   rgba(200,168,75,0.12);
+  --green:        #00C87A;
+  --green-dim:    rgba(0,200,122,0.08);
+  --red:          #E84040;
+  --red-dim:      rgba(232,64,64,0.08);
+  --yellow:       #E8A840;
+  --blue:         #4894E8;
+  --teal:         #00C8BE;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { height: 100%; }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: ui-monospace, "Cascadia Code", monospace;
-  min-height: 100vh;
+  font-family: 'IBM Plex Mono', 'Cascadia Code', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  min-height: 100%;
+  /* Scanline texture */
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
 }
 
 a { color: inherit; text-decoration: none; }
+button { font-family: inherit; cursor: pointer; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border-hi); }
+
+/* Number columns — right-align and tabular */
+.num { font-variant-numeric: tabular-nums; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px currentColor; }
+  50%       { opacity: 0.35; box-shadow: 0 0 2px currentColor; }
+}
+@keyframes pulseUrgent {
+  0%, 100% { opacity: 1; }
+  40%       { opacity: 0.15; }
+}
+@keyframes fadein {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideFromTop {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes dangerFlash {
+  0%, 100% { border-color: rgba(232,64,64,0.35); }
+  50%       { border-color: rgba(232,64,64,0.75); }
+}
+
+.fadein       { animation: fadein      0.3s ease both; }
+.slideFromTop { animation: slideFromTop 0.25s ease both; }
+.cardIn       { animation: cardIn      0.35s cubic-bezier(0.16,1,0.3,1) both; }

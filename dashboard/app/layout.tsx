@@ -3,16 +3,21 @@ import "./globals.css"
 import Nav from "@/components/Nav"
 
 export const metadata: Metadata = {
-  title: "Algobot Dashboard",
+  title: "ALGOBOT — Terminal",
   description: "MT5 agentic trading bot — live monitor",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body style={{ display: "flex", minHeight: "100vh" }}>
+      <body suppressHydrationWarning style={{ display: "flex", minHeight: "100vh" }}>
         <Nav />
-        <main style={{ flex: 1, padding: "2rem", overflowY: "auto" }}>
+        <main style={{
+          flex: 1,
+          padding: "1.5rem 1.75rem",
+          overflowY: "auto",
+          minWidth: 0,
+        }}>
           {children}
         </main>
       </body>
