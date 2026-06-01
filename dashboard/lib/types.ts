@@ -4,6 +4,9 @@ export interface BotStatus {
   last_heartbeat: string | null
   error_message: string | null
   uptime_seconds: number | null
+  balance: number | null
+  equity: number | null
+  float_pnl: number | null
   updated_at: string
 }
 
@@ -72,4 +75,16 @@ export interface PerformanceDaily {
   drawdown: number | null
   balance: number | null
   sharpe: number | null
+}
+
+export interface SignalEvaluation {
+  instrument: string
+  regime: string | null
+  in_session: boolean | null
+  strategy: string | null
+  status: "signal" | "gated" | "no_setup"
+  reason: string | null
+  setup_distance: number | null
+  detail: Record<string, unknown> | null
+  updated_at: string
 }
