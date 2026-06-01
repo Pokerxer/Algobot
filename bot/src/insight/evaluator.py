@@ -133,7 +133,7 @@ def _mom_eval(inst, regime, df, c, would_signal) -> Evaluation:
         ("ema_touch", ema_touch, "no pullback to fast EMA"),
         ("bounce", bounce, "no two-bar bounce"),
     ]
-    passed = sum(1 for _, ok, _ in checks)
+    passed = sum(1 for _, ok, _ in checks if ok)
     detail = {k: ok for k, ok, _ in checks}
     detail.update({"slope_atr": round(slope_atr, 3), "rsi": round(rsi_now, 1)})
 
