@@ -74,3 +74,13 @@ def test_momentum_status_matches_strategy_and_builds_detail():
     assert (ev.status == "signal") == (real is not None)
     assert "adx_rising" in ev.detail
     assert 0.0 <= ev.setup_distance <= 1.0
+
+
+def test_gated_momentum_only_in_choppy():
+    """momentum-only gate must block CHOPPY as well as RANGING."""
+    ev = evaluate("GBPUSDm", _state(Regime.CHOPPY, "GBPUSDm"), _walk_df(), _cfg(),
+                  MeanReversionStrategy(_cfg().strategy.mean_reversion),
+                  in_session=True, allowed_regimes=None, mtf_aligned=None,
+                  is_mean_rev_only=False, is_momentum_only=True)
+    assert ev.status == "gated"
+    assert "momentum-only" in ev.reason

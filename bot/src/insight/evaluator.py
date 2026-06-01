@@ -44,8 +44,8 @@ def evaluate(instrument: str, regime_state: RegimeState, entry_df: pd.DataFrame,
                           "out of session window", None, {})
     if is_mean_rev_only and regime in _TREND:
         return _gated(instrument, regime, "mean-reversion-only pair, regime trending")
-    if is_momentum_only and regime == Regime.RANGING:
-        return _gated(instrument, regime, "momentum-only pair, regime ranging")
+    if is_momentum_only and regime in (Regime.RANGING, Regime.CHOPPY):
+        return _gated(instrument, regime, "momentum-only pair, regime not trending")
     if allowed_regimes is not None and regime not in allowed_regimes:
         return _gated(instrument, regime, f"session-regime gate: {regime.value} not allowed this hour")
     if regime in _TREND and mtf_aligned is False:
