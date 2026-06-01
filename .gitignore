@@ -19,7 +19,9 @@ build/
 crumb.log
 mcp_out.txt
 mcp_err.txt
-*.txt
+bot/fh.txt
+bot/import_trace.txt
+bot/pd_trace.txt
 .vscode/
 
 # Dashboard
