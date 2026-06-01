@@ -8,7 +8,7 @@ from src.config.schema import AppConfig
 from src.models.regime import Regime, RegimeState
 from src.regime.indicators import compute_atr, compute_adx
 from src.strategies.base import BaseStrategy
-from src.strategies.momentum import _adx_is_rising, _SLOPE_MIN_ATR
+from src.strategies.momentum import _adx_is_rising, _SLOPE_MIN_ATR, _volume_confirms_bounce
 
 _TREND = (Regime.TRENDING_UP, Regime.TRENDING_DOWN)
 
@@ -106,7 +106,8 @@ def _mom_eval(inst, regime, df, c, would_signal) -> Evaluation:
     if any(s is None or bool(s.isna().iloc[-1]) for s in (fast, slow, atr, rsi)):
         return Evaluation(inst, rname, True, strat, "no_setup", "insufficient indicator data", 0.0, {})
 
-    close = float(df["close"].iloc[-1]); prev = float(df["close"].iloc[-2]); prev2 = float(df["close"].iloc[-3])
+    close = float(df["close"].iloc[-1]); prev = float(df["close"].iloc[-2])
+    prev2 = float(df["close"].iloc[-3]) if len(df) > 3 else prev
     fast_now = float(fast.iloc[-1]); slow_now = float(slow.iloc[-1]); atr_now = float(atr.iloc[-1]); rsi_now = float(rsi.iloc[-1])
     slow_10 = float(slow.iloc[-10]) if len(slow) > 10 else slow_now
     slope_atr = (slow_now - slow_10) / atr_now if atr_now > 0 else 0.0
@@ -125,6 +126,7 @@ def _mom_eval(inst, regime, df, c, would_signal) -> Evaluation:
         ema_touch = float(df["low"].iloc[-2]) <= fast_now * 1.001
         bounce = (close > prev) and (prev > prev2)
 
+    vol_ok = _volume_confirms_bounce(df)
     checks = [
         ("adx_rising", adx_rising, "ADX not rising"),
         ("ema_aligned", ema_aligned, "fast/slow EMA not aligned"),
@@ -132,6 +134,7 @@ def _mom_eval(inst, regime, df, c, would_signal) -> Evaluation:
         ("rsi_ok", rsi_ok, "RSI not past midline"),
         ("ema_touch", ema_touch, "no pullback to fast EMA"),
         ("bounce", bounce, "no two-bar bounce"),
+        ("vol_ok", vol_ok, "volume did not confirm bounce"),
     ]
     passed = sum(1 for _, ok, _ in checks if ok)
     detail = {k: ok for k, ok, _ in checks}
