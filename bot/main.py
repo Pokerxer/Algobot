@@ -171,6 +171,14 @@ async def main():
             signal.signal(signal.SIGTERM, _request_shutdown)
 
     db_logger.update_bot_status("RUNNING")
+
+    # Reconcile the positions table with live MT5 state before the first cycle,
+    # pruning rows for positions that closed while the bot was down.
+    try:
+        await bot.reconcile_positions_table()
+    except Exception:
+        log.exception("Startup position reconciliation failed — continuing")
+
     consecutive_failures = 0
     needs_reconnect = False
 

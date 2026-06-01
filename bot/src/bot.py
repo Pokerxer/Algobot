@@ -3,10 +3,20 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Optional
 
+def _crumb(msg):
+    from pathlib import Path
+    with open(Path(__file__).parent.parent.parent / "crumb.log", "a") as f:
+        import datetime as _dt
+        f.write(f"{_dt.datetime.now().isoformat()} BOT:{msg}\n")
+
+_crumb("START")
 import pandas as pd
+_crumb("PANDAS")
 import pandas_ta as ta
+_crumb("PANDAS_TA")
 
 from src.ai.validator import AIValidator
+_crumb("AI_VALIDATOR")
 from src.config.schema import AppConfig
 from src.data.cache import OHLCVCache
 from src.data.fetcher import DataFetcher
@@ -20,9 +30,12 @@ from src.regime.indicators import compute_atr
 from src.risk.manager import RiskManager
 from src.selection.instrument_selector import InstrumentSelector
 from src.strategies.base import BaseStrategy
+_crumb("SRC_IMPORTS")
 from src.strategies.london_breakout import LondonBreakoutStrategy
+_crumb("LONDON_BREAKOUT")
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
+_crumb("ALL_STRATEGIES")
 
 log = logging.getLogger(__name__)
 
@@ -310,6 +323,22 @@ class TradingBot:
                                 state.instrument, result.error)
 
     # ── closed trade detection ────────────────────────────────────────────────
+
+    async def reconcile_positions_table(self) -> None:
+        """Make the positions table mirror live MT5 state, once at startup.
+
+        _detect_closed_trades() only prunes positions that close while the bot
+        is running — it diffs against an in-memory baseline (_open_tickets) that
+        starts empty. A position that closes while the bot is down is therefore
+        never diffed away and lingers in the positions table. Reconcile against
+        live MT5 here, and seed the baseline so the first cycle has a reference.
+        """
+        await self._portfolio.sync()
+        live = {p.ticket: p for p in self._portfolio.positions}
+        for ticket in self._db.list_position_tickets() - set(live):
+            log.info("Reconcile: removing stale position #%d (closed in MT5)", ticket)
+            self._db.delete_position(ticket)
+        self._open_tickets = dict(live)
 
     async def _detect_closed_trades(self) -> None:
         current = {p.ticket: p for p in self._portfolio.positions}

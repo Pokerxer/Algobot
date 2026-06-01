@@ -39,3 +39,25 @@ def test_failures_swallowed_not_raised(caplog):
     client.table.side_effect = RuntimeError("network down")
     SupabaseLogger(client).update_bot_status(status="ERROR", error="x")
     assert "Supabase write failed" in caplog.text
+
+
+def test_list_position_tickets_returns_ticket_set():
+    client, chain = _fake_client()
+    chain.select.return_value.execute.return_value = MagicMock(
+        data=[{"ticket": 111}, {"ticket": 222}])
+    assert SupabaseLogger(client).list_position_tickets() == {111, 222}
+    client.table.assert_called_with("positions")
+
+
+def test_list_position_tickets_returns_empty_set_on_failure():
+    # On a read failure, return empty set so reconciliation deletes nothing.
+    client = MagicMock()
+    client.table.side_effect = RuntimeError("network down")
+    assert SupabaseLogger(client).list_position_tickets() == set()
+
+
+def test_delete_position_deletes_by_ticket():
+    client, chain = _fake_client()
+    SupabaseLogger(client).delete_position(123)
+    client.table.assert_called_with("positions")
+    chain.delete.return_value.eq.assert_called_with("ticket", 123)

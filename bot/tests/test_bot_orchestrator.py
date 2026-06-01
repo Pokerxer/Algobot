@@ -47,6 +47,29 @@ async def test_logs_regime_snapshot():
     supabase.snapshot_regime.assert_called()
 
 
+@pytest.mark.asyncio
+async def test_reconcile_positions_table_prunes_orphans_and_seeds_baseline():
+    """Startup reconciliation deletes positions rows not open in MT5 and seeds
+    the closed-trade baseline with the live positions."""
+    mcp = FakeMCPClient(responses={
+        "get_positions": [{
+            "ticket": 111, "symbol": "EURUSD", "type": "BUY",
+            "open_price": 1.10, "current_price": 1.10, "volume": 0.1,
+            "profit": 0.0, "stop_loss": None, "take_profit": None,
+            "time": 1704067200,
+        }],
+    })
+    supabase = MagicMock()
+    # DB still holds a stale row (999) that is no longer open in MT5.
+    supabase.list_position_tickets.return_value = {111, 999}
+
+    bot = TradingBot(_config(), mcp, supabase)
+    await bot.reconcile_positions_table()
+
+    supabase.delete_position.assert_called_once_with(999)
+    assert set(bot._open_tickets) == {111}
+
+
 # ── D1 EMA alignment (pure static helper) ────────────────────────────────────
 
 def _ema_df(n: int = 100, close_above_ema: bool = True):
