@@ -39,7 +39,7 @@ async def test_hard_stop_after_10_consecutive_non_mcp_failures():
     try:
         with (
             patch.object(main_module, "load_config", return_value=mock_config),
-            patch.object(main_module, "create_client", return_value=MagicMock()),
+            patch.object(main_module, "_SupabaseRest", return_value=MagicMock()),
             patch.object(main_module, "SupabaseLogger", return_value=mock_db),
             patch.object(main_module, "StdioMCPClient", return_value=mock_mcp),
             patch.object(main_module, "TradingBot", return_value=mock_bot),
@@ -69,3 +69,30 @@ def test_looks_like_mcp_failure_does_not_match_non_mcp_errors():
     assert not main_module._looks_like_mcp_failure(RuntimeError("database query failed"))
     assert not main_module._looks_like_mcp_failure(ValueError("invalid signal data"))
     assert not main_module._looks_like_mcp_failure(KeyError("missing key in response"))
+
+
+def test_supabaserest_delete_issues_filtered_delete_request():
+    """_SupabaseRest must support delete().
+
+    bot._detect_closed_trades() prunes a closed position with
+    table('positions').delete().eq('ticket', t).execute(). Without a delete()
+    method the call raises AttributeError (swallowed as a warning), so closed
+    positions are recorded as trades but never removed from the positions table.
+    """
+    rest = main_module._SupabaseRest("https://proj.supabase.co", "svc-key")
+    captured = {}
+
+    def fake_request(method, url, params=None, json=None, headers=None, timeout=None):
+        captured.update(method=method, url=url, params=params or {}, json=json)
+        resp = MagicMock()
+        resp.status_code = 204
+        resp.content = b""
+        return resp
+
+    rest._session.request = fake_request
+    rest.table("positions").delete().eq("ticket", 123).execute()
+
+    assert captured["method"] == "DELETE"
+    assert captured["url"].endswith("/rest/v1/positions")
+    assert captured["params"].get("ticket") == "eq.123"
+    assert captured["json"] is None  # a DELETE carries no request body

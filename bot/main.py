@@ -92,6 +92,10 @@ class _SupabaseRest:
         def update(self, data: dict):
             self._method = "PATCH"; self._body = data; return self
 
+        def delete(self):
+            self._method = "DELETE"
+            self._hdrs["Prefer"] = "return=minimal"; return self
+
         def eq(self, col: str, val):
             self._params[col] = f"eq.{val}"; return self
 
