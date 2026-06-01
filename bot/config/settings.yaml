@@ -48,7 +48,7 @@ strategy:
       - USDJPYm
 
 ai:
-  enabled: true
+  enabled: false   # disabled until the AI validator is finished; bot runs on rules only
   confidence_threshold: 0.6
   timeout_seconds: 30
   max_calls_per_day: 50

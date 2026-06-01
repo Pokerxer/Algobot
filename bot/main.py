@@ -3,16 +3,47 @@ import logging
 import os
 import signal
 from pathlib import Path
+
+# breadcrumb: write directly to a file so we can trace the hang regardless of
+# shell I/O redirection
+def _crumb(msg: str) -> None:
+    with open(Path(__file__).parent / "crumb.log", "a") as f:
+        import datetime
+        f.write(f"{datetime.datetime.now().isoformat()} {msg}\n")
+
+_crumb("MODULE_START")
+
 from dotenv import load_dotenv
-from supabase import create_client
+import requests as _requests
+
+_crumb("BASIC_IMPORTS_DONE")
 
 load_dotenv(Path(__file__).parent / ".env")
+_crumb("DOTENV_DONE")
+
+# WMI on this host hangs indefinitely (stuck Winmgmt provider), and Python 3.12's
+# platform.uname() queries WMI for the Windows version. pandas imports
+# platform.machine() at module load (pandas/compat/_constants.py), so any
+# `import pandas` deadlocks. Force platform to skip WMI and use its existing
+# registry/getwindowsversion() fallback by making the query raise immediately.
+import platform as _platform
+
+
+def _wmi_query_disabled(*_args, **_kwargs):
+    raise OSError("WMI disabled: query hangs on this host")
+
+
+_platform._wmi_query = _wmi_query_disabled
+_crumb("WMI_SHIM_INSTALLED")
 
 from src.ai.validator import AIValidator
+_crumb("AI_VALIDATOR_IMPORTED")
 from src.bot import TradingBot
+_crumb("TRADINGBOT_IMPORTED")
 from src.config.loader import load_config
 from src.db.supabase_client import SupabaseLogger
 from src.mcp_client.client import StdioMCPClient
+_crumb("ALL_IMPORTS_DONE")
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +61,64 @@ _MCP_RECONNECT_ERRORS = (
 )
 
 
+class _SupabaseRest:
+    """Supabase REST-only client via requests — bypasses Realtime WebSocket init.
+
+    supabase-py 2.x create_client() hangs indefinitely on Windows when the
+    Realtime WebSocket handshake stalls. SupabaseLogger only needs .table()
+    for REST insert/upsert/select, so this thin adapter is sufficient.
+    """
+
+    class _Builder:
+        def __init__(self, session: _requests.Session, url: str) -> None:
+            self._s, self._url = session, url
+            self._method, self._params, self._body, self._hdrs = "GET", {}, None, {}
+
+        def select(self, cols: str = "*"):
+            self._params["select"] = cols; return self
+
+        def limit(self, n: int):
+            self._params["limit"] = str(n); return self
+
+        def insert(self, data: dict):
+            self._method = "POST"; self._body = data
+            self._hdrs["Prefer"] = "return=minimal"; return self
+
+        def upsert(self, data: dict, on_conflict: str = "id"):
+            self._method = "POST"; self._body = data
+            self._params["on_conflict"] = on_conflict
+            self._hdrs["Prefer"] = "resolution=merge-duplicates,return=minimal"; return self
+
+        def update(self, data: dict):
+            self._method = "PATCH"; self._body = data; return self
+
+        def eq(self, col: str, val):
+            self._params[col] = f"eq.{val}"; return self
+
+        def execute(self):
+            r = self._s.request(self._method, self._url,
+                                params=self._params, json=self._body,
+                                headers=self._hdrs, timeout=10)
+            if r.status_code >= 400:
+                # Surface PostgREST's response body: raise_for_status() reports
+                # only the status line, hiding the real cause (e.g. a missing
+                # column → PGRST204). Callers like update_bot_status inspect the
+                # error text to decide on a fallback, so the body must be in it.
+                raise _requests.HTTPError(
+                    f"{r.status_code} {r.reason}: {r.text[:300]}", response=r)
+            d = r.json() if r.content else []
+            return type("R", (), {"data": d if isinstance(d, list) else [d]})()
+
+    def __init__(self, url: str, key: str) -> None:
+        self._session = _requests.Session()
+        self._session.headers.update({"apikey": key, "Authorization": f"Bearer {key}",
+                                      "Content-Type": "application/json"})
+        self._base = f"{url}/rest/v1"
+
+    def table(self, name: str) -> "_SupabaseRest._Builder":
+        return self._Builder(self._session, f"{self._base}/{name}")
+
+
 def _looks_like_mcp_failure(exc: Exception) -> bool:
     msg = f"{type(exc).__name__} {exc}"
     return any(tag in msg for tag in _MCP_RECONNECT_ERRORS)
@@ -37,14 +126,19 @@ def _looks_like_mcp_failure(exc: Exception) -> bool:
 
 async def main():
     config = load_config(Path("config/settings.yaml"))
-    supabase = create_client(
+    supabase = _SupabaseRest(
         os.environ["SUPABASE_URL"],
         os.environ["SUPABASE_SERVICE_KEY"],
     )
     db_logger = SupabaseLogger(supabase)
+    _crumb("SUPABASE_REST_DONE")
+    log.info("Supabase OK — connecting to MCP server (MT5_PATH=%s)…",
+             os.environ.get("MT5_PATH", "auto-detect"))
 
+    _crumb("MCP_CONNECT_START")
     mcp = StdioMCPClient()
     await mcp.connect()
+    _crumb("MCP_CONNECT_DONE")
     log.info("MCP connected")
 
     # Only activate AI if the API key is present
