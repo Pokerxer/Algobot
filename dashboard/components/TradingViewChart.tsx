@@ -1,9 +1,12 @@
 "use client"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 declare global {
+  interface TVWidget {
+    remove(): void
+  }
   interface Window {
-    TradingView?: { widget: new (opts: Record<string, unknown>) => void }
+    TradingView?: { widget: new (opts: Record<string, unknown>) => TVWidget }
     _tvScriptPromise?: Promise<void>
   }
 }
@@ -16,6 +19,7 @@ function loadTVScript(): Promise<void> {
     s.src = "https://s3.tradingview.com/tv.js"
     s.async = true
     s.onload = () => resolve()
+    s.onerror = () => resolve()
     document.head.appendChild(s)
   })
   return window._tvScriptPromise
@@ -35,14 +39,16 @@ export function tvSymbol(instrument: string): string {
  */
 export function TradingViewChart({ symbol }: { symbol: string }) {
   const id = `tv_${symbol.replace(/\W/g, "_")}`
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    if (!symbol) return
     let cancelled = false
+    let widget: TVWidget | null = null
     loadTVScript().then(() => {
       if (cancelled || !window.TradingView) return
-      const el = document.getElementById(id)
-      if (el) el.innerHTML = ""
-      new window.TradingView.widget({
+      if (containerRef.current) containerRef.current.innerHTML = ""
+      widget = new window.TradingView.widget({
         autosize:          true,
         symbol,
         interval:          "H1",
@@ -58,8 +64,11 @@ export function TradingViewChart({ symbol }: { symbol: string }) {
         container_id:      id,
       })
     })
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      if (widget) widget.remove()
+    }
   }, [id, symbol])
 
-  return <div id={id} style={{ width: "100%", height: 320 }} />
+  return <div id={id} ref={containerRef} style={{ width: "100%", height: 320 }} />
 }
