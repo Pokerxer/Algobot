@@ -37,7 +37,7 @@ export function tvSymbol(instrument: string): string {
  * Embeds a TradingView Advanced Chart for the given symbol.
  * Use key={symbol} at the call site to force remount on symbol change.
  */
-export function TradingViewChart({ symbol }: { symbol: string }) {
+export function TradingViewChart({ symbol, studies }: { symbol: string; studies?: string[] }) {
   const id = `tv_${symbol.replace(/\W/g, "_")}`
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -62,13 +62,14 @@ export function TradingViewChart({ symbol }: { symbol: string }) {
         hide_legend:       false,
         save_image:        false,
         container_id:      id,
+        ...(studies && studies.length > 0 ? { studies } : {}),
       })
     })
     return () => {
       cancelled = true
       if (widget) widget.remove()
     }
-  }, [id, symbol])
+  }, [id, symbol, studies])
 
   return <div id={id} ref={containerRef} style={{ width: "100%", height: 320 }} />
 }

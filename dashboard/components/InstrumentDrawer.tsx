@@ -9,6 +9,21 @@ export type DrawerItem =
   | { kind: "position"; data: Position }
   | { kind: "signal";   data: Signal   }
 
+// TradingView study IDs matched to each bot strategy's actual indicator set.
+// momentum:       EMA 20 (fast touch), EMA 50 (slow trend), RSI 14, ADX 14
+// mean_reversion: BB(20,2), RSI 14
+// london_breakout: no indicators — purely session price range
+function strategyStudies(strategy: string): string[] {
+  if (strategy === "mean_reversion") {
+    return ["BB@tv-basicstudies", "RSI@tv-basicstudies"]
+  }
+  if (strategy === "london_breakout") {
+    return []
+  }
+  // momentum + any unknown strategy
+  return ["MAExp@tv-basicstudies", "MAExp@tv-basicstudies", "RSI@tv-basicstudies", "ADX@tv-basicstudies"]
+}
+
 function proximity(pos: Position): number {
   if (!pos.stop_loss || !pos.take_profit || !pos.current_price) return 0.5
   const sl = pos.stop_loss, tp = pos.take_profit, cur = pos.current_price
@@ -306,6 +321,8 @@ export function InstrumentDrawer({
   const sym        = tvSymbol(instrument)
   const isBuy      = item.data.direction === "BUY"
   const dirColor   = isBuy ? "var(--green)" : "var(--red)"
+  const strategy   = item.data.strategy ?? ""
+  const studies    = strategyStudies(strategy)
 
   return (
     <>
@@ -370,7 +387,7 @@ export function InstrumentDrawer({
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 1.1rem 1.5rem" }}>
           <div style={{ margin: "0.75rem -1.1rem 0", borderBottom: "1px solid var(--border)" }}>
-            <TradingViewChart key={sym} symbol={sym} />
+            <TradingViewChart key={sym} symbol={sym} studies={studies} />
           </div>
 
           {item.kind === "position" && <PositionDetails pos={item.data} />}
