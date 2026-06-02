@@ -82,3 +82,25 @@ button { font-family: inherit; cursor: pointer; }
 .fadein       { animation: fadein      0.3s ease both; }
 .slideFromTop { animation: slideFromTop 0.25s ease both; }
 .cardIn       { animation: cardIn      0.35s cubic-bezier(0.16,1,0.3,1) both; }
+
+@keyframes scanLine {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(200%); }
+}
+.scanLine {
+  position: absolute;
+  top: 0; left: 0;
+  width: 120px; height: 100%;
+  background: linear-gradient(to right, transparent, rgba(0,200,122,0.04), transparent);
+  animation: scanLine 3.5s linear infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes drawerIn {
+  from { transform: translateX(100%); }
+  to   { transform: translateX(0); }
+}
+.drawerIn {
+  animation: drawerIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
