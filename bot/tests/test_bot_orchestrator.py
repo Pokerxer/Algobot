@@ -267,25 +267,29 @@ def test_usdjpy_gated_after_jpy_window():
         assert TradingBot._in_session("USDJPYm") is False
 
 
-def test_us500_momentum_allowed_through_nyse_afternoon():
-    """US500m's momentum window must cover the full NYSE session (14–21 UTC),
-    not dead-end at 17:00 leaving 17–21 silently blocked."""
+def test_us500_session_allows_all_regimes_during_nyse():
+    """US500m now allows all regimes (MR + momentum) throughout the session —
+    on choppy days it mean-reverts at band edges rather than being fully blocked."""
     with _at_utc_hour(19):
         allowed = TradingBot._session_allowed_regimes("US500m")
-    assert allowed == frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})
+    assert Regime.TRENDING_UP in allowed
+    assert Regime.RANGING in allowed
+    assert Regime.CHOPPY in allowed
 
 
-def test_momentum_only_pair_blocked_in_choppy():
-    """Momentum-only pairs must not run mean reversion in CHOPPY (not just RANGING)."""
-    assert TradingBot._mandate_blocks("GBPUSDm", Regime.CHOPPY) is True
+def test_gbpusd_not_momentum_only_in_choppy():
+    """GBPUSDm was removed from MOMENTUM_ONLY — it should be eligible for mean
+    reversion in ranging/choppy conditions like any non-designated pair."""
+    assert TradingBot._mandate_blocks("GBPUSDm", Regime.CHOPPY) is False
 
 
-def test_momentum_only_pair_blocked_in_ranging():
-    assert TradingBot._mandate_blocks("GBPUSDm", Regime.RANGING) is True
+def test_gbpusd_not_momentum_only_in_ranging():
+    assert TradingBot._mandate_blocks("GBPUSDm", Regime.RANGING) is False
 
 
-def test_momentum_only_pair_allowed_when_trending():
-    assert TradingBot._mandate_blocks("GBPUSDm", Regime.TRENDING_UP) is False
+def test_ustec_still_momentum_only_in_ranging():
+    """USTECm stays momentum-only — gap/volatility risk makes MR unreliable."""
+    assert TradingBot._mandate_blocks("USTECm", Regime.RANGING) is True
 
 
 def test_mean_rev_only_pair_blocked_when_trending():

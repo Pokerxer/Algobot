@@ -43,9 +43,9 @@ log = logging.getLogger(__name__)
 # EURUSDm is a ranging instrument — only trade mean reversion, never momentum
 _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 
-# High-ADR momentum pairs — block mean reversion signals even in ranging regime
-_MOMENTUM_ONLY: frozenset[str] = frozenset({"GBPUSDm", "GBPJPYm", "USDJPYm", "USTECm",
-                                             "BTCUSDm", "ETHUSDm"})
+# Crypto/index pairs — momentum only (gap risk makes MR band-touches unreliable)
+# GBPUSDm, GBPJPYm, USDJPYm removed: they range frequently and are good MR candidates
+_MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
 
 
 class TradingBot:
@@ -704,8 +704,8 @@ class TradingBot:
     _SESSION_HOURS: dict[str, tuple[int, int]] = {
         "EURUSD": (0, 24), # Mean-rev only — Asian session is the prime window; no hour gate
         "EUR": (7,  21),   # London 07–16 + NY 13–21 (other EUR crosses)
-        "GBPUSD": (7, 12), # London morning only — afternoon chop degrades signal quality
-        "GBP": (7,  16),   # GBPJPYm: London + early NY (highest-ADR cross)
+        "GBPUSD": (7, 18), # London + NY overlap — afternoon has strong GBP moves
+        "GBP": (7,  18),   # GBPJPYm: London + NY overlap
         # USDJPY's quote currency is JPY, but prefix matching keys on the *base*
         # currency, so it never matched the "JPY" rule below and fell through to
         # the always-on default. Give it an explicit window matching JPY intent.
@@ -719,7 +719,7 @@ class TradingBot:
         "XAG": (7,  21),
         "US5": (12, 21),   # Pre-market 12–14 (mean rev) + NYSE 14–21 (momentum)
         "US3": (13, 21),
-        "UST": (13, 16),   # USTEC: pre-open + first 2.5h post-open; afternoon chop excluded
+        "UST": (13, 21),   # USTEC: full NYSE session
         "NAS": (13, 21),
         "GER": (7,  17),   # Frankfurt/Xetra
         "UK1": (7,  16),   # London Stock Exchange
@@ -735,12 +735,16 @@ class TradingBot:
     # Hours outside all listed windows are blocked (frozenset() returned).
     _SESSION_REGIME_GATES: dict[str, list[tuple[int, int, frozenset]]] = {
         "XAU": [
-            (1,  7,  frozenset({Regime.RANGING})),                           # Asian 01–07: mean reversion (skip 00:00 Sydney gap)
-            (7,  21, frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})), # London/NY: momentum only
+            # Allow both MR (RANGING) and momentum (TRENDING) at all hours —
+            # XAU ranges frequently during London/NY and is a reliable MR pair.
+            (1, 21, frozenset({Regime.RANGING, Regime.CHOPPY,
+                               Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
         ],
         "US5": [
-            (12, 14, frozenset({Regime.RANGING})),                           # Pre-market: mean reversion
-            (14, 21, frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})), # NYSE session: momentum (matches the 12–21 session window)
+            # Allow MR in all regimes throughout the session — on choppy days
+            # US500 mean-reverts at band edges just as reliably as it trends.
+            (12, 21, frozenset({Regime.RANGING, Regime.CHOPPY,
+                                Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
         ],
         # Crypto: momentum only across all session hours.
         # No mean-reversion window — gap/news risk makes band-touch MR unreliable.
