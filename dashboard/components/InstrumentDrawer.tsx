@@ -9,20 +9,15 @@ export type DrawerItem =
   | { kind: "position"; data: Position }
   | { kind: "signal";   data: Signal   }
 
-// TradingView study IDs matched to each bot strategy's actual indicator set.
-// momentum:       EMA 20 (fast touch), EMA 50 (slow trend), RSI 14, ADX 14
-// mean_reversion: BB(20,2), RSI 14
-// london_breakout: no indicators — purely session price range
-function strategyStudies(strategy: string): string[] {
-  if (strategy === "mean_reversion") {
-    return ["BB@tv-basicstudies", "RSI@tv-basicstudies"]
-  }
-  if (strategy === "london_breakout") {
-    return []
-  }
-  // momentum + any unknown strategy
-  return ["MAExp@tv-basicstudies", "MAExp@tv-basicstudies", "RSI@tv-basicstudies", "ADX@tv-basicstudies"]
-}
+// Fixed indicator set matching the bot's actual calculations.
+// EMA 20 = fast touch line (momentum), EMA 50 = slow trend line,
+// RSI 14 = momentum/mean-reversion filter, ADX 14 = regime strength.
+const CHART_STUDIES = [
+  { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
+  { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
+  { id: "RSI@tv-basicstudies",   inputs: { length: 14 } },
+  { id: "ADX@tv-basicstudies",   inputs: { length: 14 } },
+]
 
 function proximity(pos: Position): number {
   if (!pos.stop_loss || !pos.take_profit || !pos.current_price) return 0.5
@@ -321,8 +316,7 @@ export function InstrumentDrawer({
   const sym        = tvSymbol(instrument)
   const isBuy      = item.data.direction === "BUY"
   const dirColor   = isBuy ? "var(--green)" : "var(--red)"
-  const strategy   = item.data.strategy ?? ""
-  const studies    = strategyStudies(strategy)
+  const studies    = CHART_STUDIES
 
   return (
     <>
