@@ -262,7 +262,7 @@ function SetupStatus({ ev }: { ev: SignalEvaluation }) {
               <DetailRow
                 key={k}
                 label={k.replace(/_/g, " ").toUpperCase()}
-                value={String(v)}
+                value={v === null || v === undefined ? "—" : typeof v === "object" ? JSON.stringify(v) : String(v)}
                 color={v === true ? "var(--green)" : v === false ? "var(--red)" : "var(--sub)"}
               />
             ))}
@@ -282,13 +282,17 @@ export function InstrumentDrawer({
 }) {
   const [evalData, setEvalData] = useState<SignalEvaluation | null | undefined>(undefined)
 
+  const inst = item?.data.instrument ?? null
+
   useEffect(() => {
-    if (!item) { setEvalData(undefined); return }
+    if (!inst) { setEvalData(undefined); return }
     setEvalData(undefined)
-    const inst = item.data.instrument
     supabase.from("signal_evaluations").select("*").eq("instrument", inst).single()
-      .then(({ data }) => setEvalData(data as SignalEvaluation | null))
-  }, [item])
+      .then(({ data, error }) => {
+        if (error && error.code !== "PGRST116") return
+        setEvalData(data as SignalEvaluation | null)
+      })
+  }, [inst])
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
@@ -306,6 +310,7 @@ export function InstrumentDrawer({
   return (
     <>
       <div
+        aria-hidden="true"
         onClick={onClose}
         style={{
           position: "fixed", inset: 0,
@@ -314,15 +319,22 @@ export function InstrumentDrawer({
         }}
       />
 
-      <div className="drawerIn" style={{
-        position: "fixed", top: 0, right: 0,
-        width: 440, height: "100vh",
-        background: "var(--surface)",
-        borderLeft: "1px solid var(--border)",
-        zIndex: 50,
-        display: "flex", flexDirection: "column",
-        overflow: "hidden",
-      }}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${instrument} details`}
+        tabIndex={-1}
+        className="drawerIn"
+        style={{
+          position: "fixed", top: 0, right: 0,
+          width: 440, height: "100vh",
+          background: "var(--surface)",
+          borderLeft: "1px solid var(--border)",
+          zIndex: 50,
+          display: "flex", flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
         <div style={{
           display: "flex", alignItems: "center", gap: "0.65rem",
           padding: "0.9rem 1.1rem",
@@ -345,6 +357,7 @@ export function InstrumentDrawer({
           </span>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
               marginLeft: "auto", background: "none", border: "none",
               color: "var(--muted)", fontSize: "1rem", cursor: "pointer",
