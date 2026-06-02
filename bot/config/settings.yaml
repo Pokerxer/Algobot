@@ -4,9 +4,9 @@ account:
   max_concurrent_positions: 5
   risk_per_trade_pct: 1.5
 
-# US30m removed — 0.92 correlation with US500m wastes a concurrent-position slot
-# EURUSDm kept here but routed to mean-reversion only inside bot logic
-instruments: [EURUSDm, GBPUSDm, GBPJPYm, USDJPYm, XAUUSDm, US500m, USTECm, BTCUSDm, ETHUSDm]
+# EURUSDm: mean-reversion only (routed inside bot logic)
+# US30m + US500m: correlated 0.92 — risk manager blocks same-direction dual positions
+instruments: [EURUSDm, GBPUSDm, GBPJPYm, USDJPYm, XAUUSDm, US500m, US30m, USTECm, BTCUSDm, ETHUSDm]
 
 timeframes:
   regime: H1

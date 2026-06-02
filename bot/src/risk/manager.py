@@ -39,6 +39,8 @@ _FOREX_DEFAULT = (0.0001, 10.0)   # 4-decimal forex pairs
 _HARDCODED_CORRELATIONS: dict[tuple[str, str], float] = {
     ("BTCUSDm", "ETHUSDm"): 0.90,
     ("ETHUSDm", "BTCUSDm"): 0.90,
+    ("US30m",   "US500m"):  0.92,
+    ("US500m",  "US30m"):   0.92,
 }
 
 
