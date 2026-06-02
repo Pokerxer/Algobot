@@ -41,6 +41,8 @@ _HARDCODED_CORRELATIONS: dict[tuple[str, str], float] = {
     ("ETHUSDm", "BTCUSDm"): 0.90,
     ("US30m",   "US500m"):  0.92,
     ("US500m",  "US30m"):   0.92,
+    ("XAGUSDm", "XAUUSDm"): 0.85,
+    ("XAUUSDm", "XAGUSDm"): 0.85,
 }
 
 

@@ -6,7 +6,7 @@ account:
 
 # EURUSDm: mean-reversion only (routed inside bot logic)
 # US30m + US500m: correlated 0.92 — risk manager blocks same-direction dual positions
-instruments: [EURUSDm, GBPUSDm, GBPJPYm, USDJPYm, XAUUSDm, US500m, US30m, USTECm, BTCUSDm, ETHUSDm]
+instruments: [EURUSDm, GBPUSDm, GBPJPYm, USDJPYm, XAUUSDm, XAGUSDm, US500m, US30m, USTECm, BTCUSDm, ETHUSDm]
 
 timeframes:
   regime: H1
