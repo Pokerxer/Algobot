@@ -30,8 +30,8 @@ strategy:
 
   mean_reversion:
     rsi_period: 14
-    rsi_oversold: 28            # relaxed from 25 — catches real oversold bounces without adding noise
-    rsi_overbought: 72          # relaxed from 75
+    rsi_oversold: 30
+    rsi_overbought: 70
     bb_std: 2.0
     require_double_touch: false
     require_divergence: false
