@@ -16,7 +16,9 @@ class RiskDecision:
 # pip_size: price change that equals 1 pip for this instrument category
 # pip_value: USD profit/loss per pip for 1 standard lot
 _INSTRUMENT_SPECS: dict[str, tuple[float, float]] = {
-    "JPY": (0.01,   9.0),    # 3-decimal JPY pairs
+    # JPY pip_value is dynamic: $10/USDJPY_rate per standard lot.
+    # Placeholder 6.5 (~159 rate); overridden at evaluation time via entry_price.
+    "JPY": (0.01,   6.5),    # 3-decimal JPY pairs — updated dynamically below
     "XAU": (0.01,   1.0),    # Gold  (100 oz/lot, $0.01 tick → $1/lot/pip)
     "XAG": (0.001,  0.5),    # Silver
     # Exness index specs (verified from MT5 symbol_info):
@@ -94,6 +96,12 @@ class RiskManager:
             return RiskDecision(False, reason="Invalid stop distance")
 
         pip_size, pip_value = _pip_spec(signal.instrument)
+
+        # For JPY pairs: pip_value = $10 / USDJPY_rate — must use live rate, not a constant.
+        # Verified from Exness deal history: at rate ~159 the real value is ~$6.28, not $9.
+        clean_inst = signal.instrument.rstrip("m").upper()
+        if "JPY" in clean_inst and signal.entry_price > 0:
+            pip_value = 10.0 / signal.entry_price  # standard lot; scales correctly with rate
 
         # Per-instrument minimum stop in pips.
         # Set to ~50% of typical M15 ATR so normal volatility always clears the bar.
