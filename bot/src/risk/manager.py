@@ -16,11 +16,11 @@ class RiskDecision:
 # pip_size: price change that equals 1 pip for this instrument category
 # pip_value: USD profit/loss per pip for 1 standard lot
 _INSTRUMENT_SPECS: dict[str, tuple[float, float]] = {
-    # JPY pip_value is dynamic: $10/USDJPY_rate per standard lot.
-    # Placeholder 6.5 (~159 rate); overridden at evaluation time via entry_price.
-    "JPY": (0.01,   6.5),    # 3-decimal JPY pairs — updated dynamically below
+    # JPY pip_value is dynamic: $1000/USDJPY_rate per standard lot (100,000 units × 0.01 pip / rate).
+    # Placeholder 6.25 (rate ~160); overridden at evaluation time via entry_price.
+    "JPY": (0.01,   6.25),   # 3-decimal JPY pairs — updated dynamically below
     "XAU": (0.01,   1.0),    # Gold  (100 oz/lot, $0.01 tick → $1/lot/pip)
-    "XAG": (0.001,  0.5),    # Silver
+    "XAG": (0.001,  5.0),    # Silver (5000 oz/lot; verified from Exness live trades)
     # Exness index specs (verified from MT5 symbol_info):
     # point=0.01, tick_size=0.01, tick_value=$0.01/lot
     "US5": (0.01,   0.01),   # US500m  — S&P 500
@@ -97,11 +97,18 @@ class RiskManager:
 
         pip_size, pip_value = _pip_spec(signal.instrument)
 
-        # For JPY pairs: pip_value = $10 / USDJPY_rate — must use live rate, not a constant.
-        # Verified from Exness deal history: at rate ~159 the real value is ~$6.28, not $9.
+        # JPY pairs: pip_value = 1000 / USDJPY_rate per standard lot
+        # (100,000 units × 0.01 pip ÷ USDJPY_rate = $6.25 at rate 160).
+        # Verified: USDJPYm ~$6.67, GBPJPYm ~$6.19 from live Exness tests.
+        # For USDJPY, entry_price IS the rate. For crosses (GBPJPY), entry_price is
+        # the cross rate; implied USDJPY ≈ GBPJPY / GBPUSD ≈ 160, so 1000/entry_price
+        # would be ~4.7 (wrong). Use the verified average ~6.25 for non-USDJPY JPY pairs.
         clean_inst = signal.instrument.rstrip("m").upper()
         if "JPY" in clean_inst and signal.entry_price > 0:
-            pip_value = 10.0 / signal.entry_price  # standard lot; scales correctly with rate
+            if clean_inst.startswith("USD"):
+                pip_value = 1000.0 / signal.entry_price  # exact for USDJPY
+            else:
+                pip_value = 6.25   # verified approximation for GBPJPY, EURJPY etc. at ~160 USDJPY
 
         # Per-instrument minimum stop in pips.
         # Set to ~50% of typical M15 ATR so normal volatility always clears the bar.
@@ -127,10 +134,21 @@ class RiskManager:
         if actual_pips < min_stop_pips:
             return RiskDecision(False, reason=f"Stop too tight ({actual_pips:.0f} pips < {min_stop_pips:.0f} min for {signal.instrument})")
 
+        # Minimum lot sizes verified from Exness live tests (0.01 lot rejected → 0.1 required)
+        _min_lots: dict[str, float] = {
+            "US5": 0.1,   # US500m — Exness minimum 0.1
+            "ETH": 0.1,   # ETHUSDm — Exness minimum 0.1
+            "US3": 0.1,   # US30m  — Exness minimum 0.1
+        }
+        broker_min_lot = next(
+            (v for k, v in _min_lots.items() if clean.startswith(k)),
+            0.01,
+        )
+
         pip_distance = stop_distance / pip_size
         lot_size = round(risk_amount / (pip_distance * pip_value), 2)
-        if lot_size < 0.01:
-            return RiskDecision(False, reason=f"Lot size below broker minimum ({lot_size:.4f})")
+        if lot_size < broker_min_lot:
+            return RiskDecision(False, reason=f"Lot size below broker minimum ({lot_size:.4f} < {broker_min_lot})")
 
         # Hard cap: no single position larger than 5% of balance in notional risk
         max_risk_pct = 5.0
