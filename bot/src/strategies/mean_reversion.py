@@ -79,8 +79,8 @@ class MeanReversionStrategy(BaseStrategy):
             return Signal(
                 instrument=regime.instrument, direction=Direction.BUY,
                 entry_price=close,
-                stop_loss=lower - atr_now,
-                take_profit=lower + (middle - lower) / 3,
+                stop_loss=close - atr_now,   # 1 ATR below entry — always below close
+                take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )
 
@@ -97,8 +97,8 @@ class MeanReversionStrategy(BaseStrategy):
             return Signal(
                 instrument=regime.instrument, direction=Direction.SELL,
                 entry_price=close,
-                stop_loss=upper + atr_now,
-                take_profit=upper - (upper - middle) / 3,
+                stop_loss=close + atr_now,   # 1 ATR above entry — always above close
+                take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )
 

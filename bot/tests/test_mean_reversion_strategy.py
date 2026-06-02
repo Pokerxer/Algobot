@@ -77,10 +77,13 @@ def test_fires_in_choppy_regime():
 def test_buys_on_oversold_lower_band():
     strat = MeanReversionStrategy(MeanReversionStrategyConfig())
     rs = RegimeState(instrument="EURUSD", regime=Regime.RANGING, confidence=0.7)
-    sig = strat.generate_signal(_ranging_with_dip(), rs)
+    df = _ranging_with_dip()
+    sig = strat.generate_signal(df, rs)
     assert sig is not None
     assert sig.direction.value == "BUY"
+    # Stop below entry, TP (middle band) above entry
     assert sig.stop_loss < sig.entry_price
+    assert sig.take_profit > sig.entry_price
 
 
 # ── Divergence unit tests ─────────────────────────────────────────────────────
@@ -153,10 +156,10 @@ def test_divergence_allows_signal_when_rsi_recovers():
     assert sig.direction.value == "BUY"
 
 
-# ── 1/3-band take-profit target ───────────────────────────────────────────────
+# ── middle-band take-profit target ───────────────────────────────────────────
 
-def test_buy_take_profit_at_one_third_band():
-    """BUY TP is at lower + (middle - lower) / 3, not at the full middle band."""
+def test_buy_take_profit_at_middle_band():
+    """BUY TP targets the middle band (full mean reversion), giving R/R > 1:1."""
     strat = MeanReversionStrategy(MeanReversionStrategyConfig())
     rs = RegimeState(instrument="EURUSD", regime=Regime.RANGING, confidence=0.7)
     df = _ranging_with_dip()
@@ -165,16 +168,13 @@ def test_buy_take_profit_at_one_third_band():
     assert sig.direction.value == "BUY"
 
     bb = ta.bbands(df["close"], length=20, std=2.0)
-    l_col = next(c for c in bb.columns if c.startswith("BBL"))
     m_col = next(c for c in bb.columns if c.startswith("BBM"))
-    lower  = float(bb[l_col].iloc[-1])
     middle = float(bb[m_col].iloc[-1])
-    expected_tp = lower + (middle - lower) / 3
-    assert abs(sig.take_profit - expected_tp) < 1e-6
+    assert abs(sig.take_profit - middle) < 1e-6
 
 
-def test_sell_take_profit_at_one_third_band():
-    """SELL TP is at upper - (upper - middle) / 3, not at the full middle band."""
+def test_sell_take_profit_at_middle_band():
+    """SELL TP targets the middle band (full mean reversion), giving R/R > 1:1."""
     rng = np.random.default_rng(42)
     n = 200
     close = 1.0 + 0.005 * np.sin(np.linspace(0, 20, n)) + rng.normal(0, 0.0002, n)
@@ -189,9 +189,6 @@ def test_sell_take_profit_at_one_third_band():
     assert sig.direction.value == "SELL"
 
     bb = ta.bbands(df["close"], length=20, std=2.0)
-    u_col = next(c for c in bb.columns if c.startswith("BBU"))
     m_col = next(c for c in bb.columns if c.startswith("BBM"))
-    upper  = float(bb[u_col].iloc[-1])
     middle = float(bb[m_col].iloc[-1])
-    expected_tp = upper - (upper - middle) / 3
-    assert abs(sig.take_profit - expected_tp) < 1e-6
+    assert abs(sig.take_profit - middle) < 1e-6

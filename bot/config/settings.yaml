@@ -26,7 +26,7 @@ strategy:
     atr_stop_multiplier: 2.0    # 33% more room — fewer noise stop-outs
     atr_target_multiplier: 4.0  # 2:1 R/R maintained with wider stop
     rsi_period: 14
-    rsi_midline: 40.0           # allows genuine pullback entries (RSI 40–60 zone)
+    rsi_midline: 50.0
 
   mean_reversion:
     rsi_period: 14

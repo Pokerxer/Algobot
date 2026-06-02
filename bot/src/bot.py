@@ -43,9 +43,10 @@ log = logging.getLogger(__name__)
 # EURUSDm is a ranging instrument — only trade mean reversion, never momentum
 _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 
-# Crypto/index pairs — momentum only (gap risk makes MR band-touches unreliable)
-# GBPUSDm, GBPJPYm, USDJPYm removed: they range frequently and are good MR candidates
-_MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
+# Momentum-only pairs — too volatile or gap-prone for reliable MR band-touch entries
+# GBPJPYm: 200+ pip daily range, MR stops blow out on normal noise
+# USTECm/BTC/ETH: gap and spike risk makes MR unreliable
+_MOMENTUM_ONLY: frozenset[str] = frozenset({"GBPJPYm", "USTECm", "BTCUSDm", "ETHUSDm"})
 
 
 class TradingBot:
