@@ -35,7 +35,7 @@ strategy:
     bb_std: 2.0
     require_double_touch: false
     require_divergence: false
-    bb_expansion_filter: true   # skip if bands are widening (volatility spike)
+    bb_expansion_filter: false
 
   london_breakout:
     session_start_utc: 7
