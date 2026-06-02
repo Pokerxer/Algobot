@@ -96,25 +96,24 @@ class RiskManager:
         pip_size, pip_value = _pip_spec(signal.instrument)
 
         # Per-instrument minimum stop in pips.
-        # Prevents entering on low-volatility signals where the ATR-based stop is too
-        # tight to survive normal price noise for that asset class.
+        # Set to ~50% of typical M15 ATR so normal volatility always clears the bar.
+        # Old values were calibrated for lower_band - 1×ATR; new formula is
+        # close - 1×ATR so stop_distance == 1×ATR exactly — mins must be ≤ ATR.
         _min_pips: dict[str, float] = {
-            "XAU": 1500,   # gold: $15 min  (1500 pips × $0.01 = $15)
-            "XAG":  800,   # silver
-            # Index mins scaled to new pip_size:
-            "US5": 1500,   # US500: 15-pt min  (1500 × $0.01 = $15)
-            "UST": 3000,   # USTEC: 30-pt min  (3000 × $0.01 = $30)
-            "NAS": 3000,   # NAS100: same as USTEC
-            "US3":  300,   # US30:  30-pt min  (300  × $0.10 = $30)
-            "JPY":   15,   # JPY pairs: 15 pips (0.15 price)
-            # Crypto: H1 ATR noise of $250+ for BTC, $50+ for ETH
-            "BTC":  500,   # BTC:  $500 min  (500 pips × $1.0)
-            "ETH": 1000,   # ETH:  $100 min  (1000 pips × $0.10)
+            "XAU":  800,   # gold:   $8 min  (800 pips × $0.01) — M15 ATR ~$10-25
+            "XAG":   80,   # silver: $0.08 min (80 pips × $0.001) — M15 ATR ~$0.15-0.35
+            "US5":  500,   # US500:  $5 min  (500 × $0.01) — M15 ATR ~$8-20
+            "UST": 1500,   # USTEC:  $15 min (1500 × $0.01) — M15 ATR ~$20-50
+            "NAS": 1500,   # NAS100: same as USTEC
+            "US3":  200,   # US30:   $20 min (200 × $0.10) — M15 ATR ~$30-80
+            "JPY":    8,   # JPY pairs: 8 pips — M15 ATR ~20-35 pips
+            "BTC":  150,   # BTC:  $150 min (150 × $1.0) — M15 ATR ~$200-400
+            "ETH":   60,   # ETH:  $6 min  (60 × $0.10)  — M15 ATR ~$10-20
         }
         clean = signal.instrument.rstrip("m").upper()
         min_stop_pips = next(
             (v for k, v in _min_pips.items() if clean.startswith(k)),
-            15.0,  # default: 15 pips for 4-decimal forex
+            5.0,   # default: 5 pips for 4-decimal forex (M15 ATR ~8-12 pips)
         )
         actual_pips = stop_distance / pip_size
         if actual_pips < min_stop_pips:
