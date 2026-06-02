@@ -1,7 +1,7 @@
 "use client"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import type { Position, Signal, SignalEvaluation } from "@/lib/types"
+import type { Position, Signal, SignalEvaluation, Trade } from "@/lib/types"
 import { fmtPrice, fmtPips, fmtPnl, fmtPct, timeAgo } from "@/lib/fmt"
 import { TradingViewChart, tvSymbol } from "./TradingViewChart"
 
@@ -291,17 +291,24 @@ export function InstrumentDrawer({
   onClose: () => void
 }) {
   const [evalData, setEvalData] = useState<SignalEvaluation | null | undefined>(undefined)
+  const [trades,   setTrades]   = useState<Trade[]>([])
 
   const inst = item?.data.instrument ?? null
 
   useEffect(() => {
-    if (!inst) { setEvalData(undefined); return }
+    if (!inst) { setEvalData(undefined); setTrades([]); return }
     setEvalData(undefined)
     supabase.from("signal_evaluations").select("*").eq("instrument", inst).single()
       .then(({ data, error }) => {
         if (error && error.code !== "PGRST116") return
         setEvalData(data as SignalEvaluation | null)
       })
+    supabase.from("trades")
+      .select("entry_price,exit_price,direction,profit,opened_at,closed_at")
+      .eq("instrument", inst)
+      .order("closed_at", { ascending: false })
+      .limit(30)
+      .then(({ data }) => setTrades((data ?? []) as Trade[]))
   }, [inst])
 
   useEffect(() => {
@@ -381,7 +388,13 @@ export function InstrumentDrawer({
 
         <div style={{ flex: 1, overflowY: "auto", padding: "0 1.1rem 1.5rem" }}>
           <div style={{ margin: "0.75rem -1.1rem 0", borderBottom: "1px solid var(--border)" }}>
-            <TradingViewChart key={sym} symbol={sym} studies={studies} />
+            <TradingViewChart
+              key={sym}
+              symbol={sym}
+              studies={studies}
+              position={item.kind === "position" ? item.data : undefined}
+              trades={trades}
+            />
           </div>
 
           {item.kind === "position" && <PositionDetails pos={item.data} />}
