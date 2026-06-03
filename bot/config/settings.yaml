@@ -37,6 +37,7 @@ strategy:
     require_divergence: false
     bb_expansion_filter: false
     require_order_block: true   # SMC: only enter at institutional order block zones
+    require_liquidity_sweep: true  # SMC: enter only after band is swept and price recovers
 
   london_breakout:
     session_start_utc: 7

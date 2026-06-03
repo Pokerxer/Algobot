@@ -86,7 +86,17 @@ class MeanReversionStrategy(BaseStrategy):
                     return i
             return None
 
-        if close <= lower and rsi_now < self._cfg.rsi_oversold:
+        # BUY entry: band touch + RSI oversold.
+        # Liquidity sweep mode: require prev bar's low to have swept below the band
+        # and the current bar to close BACK ABOVE it — confirming institutional absorption.
+        # Standard mode: current close simply at/below the band.
+        if self._cfg.require_liquidity_sweep and len(df) >= 2:
+            prev_low = float(df["low"].iloc[-2])
+            buy_trigger = prev_low <= lower and close > lower
+        else:
+            buy_trigger = close <= lower
+
+        if buy_trigger and rsi_now < self._cfg.rsi_oversold:
             if self._cfg.require_order_block and not price_at_bullish_ob(df, close):
                 return None   # no institutional support at this level
             prior_idx = _prior_touch_idx("lower")
@@ -106,7 +116,15 @@ class MeanReversionStrategy(BaseStrategy):
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )
 
-        if close >= upper and rsi_now > self._cfg.rsi_overbought:
+        # SELL entry: band touch + RSI overbought.
+        # Liquidity sweep mode: prev bar's high swept above the band, current bar closes back below.
+        if self._cfg.require_liquidity_sweep and len(df) >= 2:
+            prev_high = float(df["high"].iloc[-2])
+            sell_trigger = prev_high >= upper and close < upper
+        else:
+            sell_trigger = close >= upper
+
+        if sell_trigger and rsi_now > self._cfg.rsi_overbought:
             if self._cfg.require_order_block and not price_at_bearish_ob(df, close):
                 return None   # no institutional resistance at this level
             prior_idx = _prior_touch_idx("upper")

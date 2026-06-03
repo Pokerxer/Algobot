@@ -60,14 +60,14 @@ def _bb_lower_at_bar(df, bar_idx):
 
 
 def test_skips_trending_regime():
-    strat = MeanReversionStrategy(MeanReversionStrategyConfig())
+    strat = MeanReversionStrategy(MeanReversionStrategyConfig(require_liquidity_sweep=False))
     rs = RegimeState(instrument="EURUSD", regime=Regime.TRENDING_UP, confidence=0.8)
     assert strat.generate_signal(_ranging_with_dip(), rs) is None
 
 
 def test_fires_in_choppy_regime():
     """CHOPPY (ADX 20-33) should also allow mean reversion — EURUSD Asian session."""
-    strat = MeanReversionStrategy(MeanReversionStrategyConfig())
+    strat = MeanReversionStrategy(MeanReversionStrategyConfig(require_liquidity_sweep=False))
     rs = RegimeState(instrument="EURUSDm", regime=Regime.CHOPPY, confidence=0.5)
     sig = strat.generate_signal(_ranging_with_dip(), rs)
     assert sig is not None
@@ -75,7 +75,7 @@ def test_fires_in_choppy_regime():
 
 
 def test_buys_on_oversold_lower_band():
-    strat = MeanReversionStrategy(MeanReversionStrategyConfig())
+    strat = MeanReversionStrategy(MeanReversionStrategyConfig(require_liquidity_sweep=False))
     rs = RegimeState(instrument="EURUSD", regime=Regime.RANGING, confidence=0.7)
     df = _ranging_with_dip()
     sig = strat.generate_signal(df, rs)
@@ -126,6 +126,7 @@ def test_divergence_blocks_signal_when_rsi_continues_falling():
         require_double_touch=True,
         require_divergence=True,
         bb_expansion_filter=False,
+        require_liquidity_sweep=False,
     )
     strat = MeanReversionStrategy(cfg)
     rs = RegimeState(instrument="EURUSDm", regime=Regime.RANGING, confidence=0.8)
@@ -148,6 +149,7 @@ def test_divergence_allows_signal_when_rsi_recovers():
         require_double_touch=True,
         require_divergence=True,
         bb_expansion_filter=False,
+        require_liquidity_sweep=False,
     )
     strat = MeanReversionStrategy(cfg)
     rs = RegimeState(instrument="EURUSDm", regime=Regime.RANGING, confidence=0.8)
@@ -160,7 +162,7 @@ def test_divergence_allows_signal_when_rsi_recovers():
 
 def test_buy_take_profit_at_middle_band():
     """BUY TP targets the middle band (full mean reversion), giving R/R > 1:1."""
-    strat = MeanReversionStrategy(MeanReversionStrategyConfig())
+    strat = MeanReversionStrategy(MeanReversionStrategyConfig(require_liquidity_sweep=False))
     rs = RegimeState(instrument="EURUSD", regime=Regime.RANGING, confidence=0.7)
     df = _ranging_with_dip()
     sig = strat.generate_signal(df, rs)
@@ -182,7 +184,7 @@ def test_sell_take_profit_at_middle_band():
     df = pd.DataFrame({"open": close, "high": close + 0.0005,
                        "low": close - 0.0005, "close": close})
 
-    strat = MeanReversionStrategy(MeanReversionStrategyConfig())
+    strat = MeanReversionStrategy(MeanReversionStrategyConfig(require_liquidity_sweep=False))
     rs = RegimeState(instrument="EURUSD", regime=Regime.RANGING, confidence=0.7)
     sig = strat.generate_signal(df, rs)
     assert sig is not None
@@ -192,3 +194,66 @@ def test_sell_take_profit_at_middle_band():
     m_col = next(c for c in bb.columns if c.startswith("BBM"))
     middle = float(bb[m_col].iloc[-1])
     assert abs(sig.take_profit - middle) < 1e-6
+
+
+# ── Liquidity sweep entry trigger ─────────────────────────────────────────────
+
+def _sweep_df(n: int = 200):
+    """DataFrame where the prev bar swept below the lower BB and the current
+    bar closed back above it, with RSI < 30.
+
+    Verified values:
+      lower_BB ≈ 1.038, close[-1] ≈ 1.042, prev_low ≈ 1.033, RSI ≈ 24.9
+    """
+    import numpy as np
+    close = np.linspace(1.20, 1.04, 190)
+    close = np.append(close, [1.038, 1.042] + [1.042] * 8)
+    lows = close - 0.0008
+    lows[-2] = 1.033   # sweep bar: low well below the ~1.038 lower band
+    return pd.DataFrame({
+        "open":  close + 0.0001,
+        "high":  close + 0.0004,
+        "low":   lows,
+        "close": close,
+    })
+
+
+def test_sweep_trigger_fires_when_prev_bar_swept_and_recovered():
+    """With require_liquidity_sweep=True, signal fires when prev bar's low
+    broke below the lower BB and the current bar closed back above."""
+    cfg = MeanReversionStrategyConfig(
+        require_order_block=False,  # isolate sweep logic
+        require_liquidity_sweep=True,
+    )
+    rs = RegimeState(instrument="EURUSDm", regime=Regime.RANGING, confidence=0.5)
+    sig = MeanReversionStrategy(cfg).generate_signal(_sweep_df(), rs)
+    assert sig is not None
+    assert sig.direction.value == "BUY"
+
+
+def test_sweep_trigger_blocked_when_no_recovery():
+    """No signal when current bar's close is still below the lower band (no recovery yet).
+
+    We use the sweep_df fixture but replace close[-1] with a value that stays
+    below the lower band (~1.038) — confirming the recovery check is the gating factor.
+    """
+    df = _sweep_df().copy()
+    # Lower close[-1] to well below the lower band so close > lower is False
+    close_vals = df["close"].values.copy()
+    close_vals[-1] = 1.032   # below the ~1.038 lower band → no recovery → no signal
+    df["close"] = close_vals
+    cfg = MeanReversionStrategyConfig(require_order_block=False, require_liquidity_sweep=True)
+    rs = RegimeState(instrument="EURUSDm", regime=Regime.RANGING, confidence=0.5)
+    sig = MeanReversionStrategy(cfg).generate_signal(df, rs)
+    assert sig is None
+
+
+def test_original_entry_still_works_when_sweep_disabled():
+    """With require_liquidity_sweep=False, the original close<=lower condition applies."""
+    cfg = MeanReversionStrategyConfig(require_order_block=False, require_liquidity_sweep=False)
+    rs = RegimeState(instrument="EURUSD", regime=Regime.RANGING, confidence=0.7)
+    df = _ranging_with_dip()
+    # _ranging_with_dip produces a dip that closes at/below the lower band
+    sig = MeanReversionStrategy(cfg).generate_signal(df, rs)
+    assert sig is not None
+    assert sig.direction.value == "BUY"

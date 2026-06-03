@@ -45,6 +45,7 @@ class MeanReversionStrategyConfig(BaseModel):
     require_divergence: bool = False    # RSI must be less oversold at second touch (divergence)
     bb_expansion_filter: bool = False   # reject expanding bands (enable in prod via settings)
     require_order_block: bool = True    # only enter at institutional OB zones (SMC filter)
+    require_liquidity_sweep: bool = True  # enter only after band is swept and price recovers
 
 
 class LondonBreakoutStrategyConfig(BaseModel):
