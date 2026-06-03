@@ -6,8 +6,9 @@ import { fmtPrice, fmtPips, fmtPnl, fmtPct, timeAgo } from "@/lib/fmt"
 import { TradingViewChart, tvSymbol } from "./TradingViewChart"
 
 export type DrawerItem =
-  | { kind: "position"; data: Position }
-  | { kind: "signal";   data: Signal   }
+  | { kind: "position";   data: Position }
+  | { kind: "signal";     data: Signal   }
+  | { kind: "instrument"; data: { instrument: string } }
 
 // Fixed indicator set matching the bot's actual calculations.
 // EMA 20 = fast touch line (momentum), EMA 50 = slow trend line,
@@ -321,7 +322,8 @@ export function InstrumentDrawer({
 
   const instrument = item.data.instrument
   const sym        = tvSymbol(instrument)
-  const isBuy      = item.data.direction === "BUY"
+  const hasDir     = item.kind === "position" || item.kind === "signal"
+  const isBuy      = hasDir && (item.data as { direction: string }).direction === "BUY"
   const dirColor   = isBuy ? "var(--green)" : "var(--red)"
   const studies    = CHART_STUDIES
 
@@ -362,16 +364,18 @@ export function InstrumentDrawer({
           <span style={{ fontSize: "1.05rem", fontWeight: 700, letterSpacing: "0.03em" }}>
             {instrument}
           </span>
-          <span style={{
-            fontSize: "0.57rem", fontWeight: 700, padding: "0.1rem 0.42rem",
-            background: isBuy ? "rgba(0,200,122,0.1)" : "rgba(232,64,64,0.1)",
-            color: dirColor, letterSpacing: "0.08em",
-            borderLeft: `2px solid ${dirColor}`,
-          }}>
-            {item.data.direction}
-          </span>
+          {hasDir && (
+            <span style={{
+              fontSize: "0.57rem", fontWeight: 700, padding: "0.1rem 0.42rem",
+              background: isBuy ? "rgba(0,200,122,0.1)" : "rgba(232,64,64,0.1)",
+              color: dirColor, letterSpacing: "0.08em",
+              borderLeft: `2px solid ${dirColor}`,
+            }}>
+              {(item.data as { direction: string }).direction}
+            </span>
+          )}
           <span style={{ fontSize: "0.52rem", letterSpacing: "0.1em", color: "var(--muted)" }}>
-            {item.kind === "position" ? "POSITION" : "SIGNAL"}
+            {item.kind === "position" ? "POSITION" : item.kind === "signal" ? "SIGNAL" : "INSIGHT"}
           </span>
           <button
             onClick={onClose}
@@ -399,6 +403,7 @@ export function InstrumentDrawer({
 
           {item.kind === "position" && <PositionDetails pos={item.data} />}
           {item.kind === "signal"   && <SignalDetails   sig={item.data} />}
+          {/* kind === "instrument": chart + setup status only */}
 
           {evalData != null && <SetupStatus ev={evalData} />}
           {evalData === null && (

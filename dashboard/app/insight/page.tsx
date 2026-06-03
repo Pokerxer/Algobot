@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "@/lib/supabase"
 import type { SignalEvaluation } from "@/lib/types"
 import { timeAgo } from "@/lib/fmt"
+import { InstrumentDrawer, type DrawerItem } from "@/components/InstrumentDrawer"
 
 const STATUS = {
   signal:   { color: "var(--green)",  label: "SETUP READY" },
@@ -20,28 +21,52 @@ function Bar({ value }: { value: number | null }) {
   )
 }
 
-function Row({ e }: { e: SignalEvaluation }) {
+function Row({ e, onOpen }: { e: SignalEvaluation; onOpen: (item: DrawerItem) => void }) {
   const [open, setOpen] = useState(false)
   const s = STATUS[e.status] ?? STATUS.gated
   const stale = e.updated_at ? Date.now() - new Date(e.updated_at).getTime() > 5 * 60 * 1000 : false
   return (
     <div style={{ borderBottom: "1px solid var(--border)", opacity: stale ? 0.5 : 1 }}>
-      <div onClick={() => e.detail && setOpen(o => !o)}
-        style={{ display: "grid", gridTemplateColumns: "120px 110px 110px 90px 1fr", gap: "1rem",
-          alignItems: "center", padding: "0.6rem 0.85rem", cursor: e.detail ? "pointer" : "default" }}>
-        <span style={{ fontWeight: 700, fontSize: "0.8rem" }}>{e.instrument}</span>
+      <div
+        onClick={() => e.detail && setOpen(o => !o)}
+        style={{
+          display: "grid", gridTemplateColumns: "120px 110px 110px 90px 1fr", gap: "1rem",
+          alignItems: "center", padding: "0.6rem 0.85rem", cursor: e.detail ? "pointer" : "default",
+        }}
+      >
+        <button
+          onClick={ev => { ev.stopPropagation(); onOpen({ kind: "instrument", data: { instrument: e.instrument } }) }}
+          style={{
+            fontWeight: 700, fontSize: "0.8rem",
+            background: "none", border: "none", color: "inherit", cursor: "pointer",
+            padding: 0, fontFamily: "inherit", textAlign: "left",
+            textDecoration: "underline", textDecorationColor: "var(--border-hi)",
+            textUnderlineOffset: "3px",
+          }}
+        >
+          {e.instrument}
+        </button>
         <span style={{ fontSize: "0.65rem", color: "var(--muted)" }}>{e.regime ?? "—"}</span>
-        <span style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", color: s.color }}>{s.label}</span>
+        <span style={{ fontSize: "0.62rem", fontWeight: 700, letterSpacing: "0.06em", color: s.color }}>
+          {s.label}
+        </span>
         <Bar value={e.setup_distance} />
-        <span style={{ fontSize: "0.65rem", color: "var(--dim)", overflow: "hidden",
-          textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.reason ?? ""}</span>
+        <span style={{
+          fontSize: "0.65rem", color: "var(--dim)",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {e.reason ?? ""}
+        </span>
       </div>
       {open && e.detail && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem 1.25rem",
-          padding: "0.4rem 0.85rem 0.7rem", fontSize: "0.6rem", color: "var(--muted)" }}>
+        <div style={{
+          display: "flex", flexWrap: "wrap", gap: "0.5rem 1.25rem",
+          padding: "0.4rem 0.85rem 0.7rem", fontSize: "0.6rem", color: "var(--muted)",
+        }}>
           {Object.entries(e.detail).map(([k, v]) => (
             <span key={k}>
-              {k}: <span style={{ color: v === true ? "var(--green)" : v === false ? "var(--red)" : "var(--sub)" }}>
+              {k}:{" "}
+              <span style={{ color: v === true ? "var(--green)" : v === false ? "var(--red)" : "var(--sub)" }}>
                 {String(v)}
               </span>
             </span>
@@ -53,7 +78,8 @@ function Row({ e }: { e: SignalEvaluation }) {
 }
 
 export default function Insight() {
-  const [rows, setRows] = useState<SignalEvaluation[]>([])
+  const [rows,       setRows]       = useState<SignalEvaluation[]>([])
+  const [drawerItem, setDrawerItem] = useState<DrawerItem | null>(null)
 
   const load = useCallback(() =>
     supabase.from("signal_evaluations").select("*").order("instrument")
@@ -77,13 +103,14 @@ export default function Insight() {
         {latest && <span style={{ fontSize: "0.6rem", color: "var(--dim)" }}>updated {timeAgo(latest)} ago</span>}
       </div>
       <div style={{ background: "var(--panel)", border: "1px solid var(--border)" }}>
-        {rows.map(e => <Row key={e.instrument} e={e} />)}
+        {rows.map(e => <Row key={e.instrument} e={e} onOpen={setDrawerItem} />)}
         {rows.length === 0 && (
           <div style={{ padding: "2rem", textAlign: "center", color: "var(--muted)", fontSize: "0.72rem" }}>
             — no evaluations yet —
           </div>
         )}
       </div>
+      <InstrumentDrawer item={drawerItem} onClose={() => setDrawerItem(null)} />
     </div>
   )
 }
