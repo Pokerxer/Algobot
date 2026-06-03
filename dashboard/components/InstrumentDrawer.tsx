@@ -15,7 +15,7 @@ export type DrawerItem =
 // RSI 14 = momentum/mean-reversion filter, ADX 14 = regime strength.
 const CHART_STUDIES = [
   { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
-  { id: "MAExp@tv-basicstudies", inputs: { length: 50 } },
+  { id: "MAExp@tv-basicstudies", inputs: { length: 50 }, overrides: { "Plot.color": "#A855F7" } },
   { id: "RSI@tv-basicstudies",   inputs: { length: 14 } },
   { id: "ADX@tv-basicstudies",   inputs: { length: 14 } },
 ]
