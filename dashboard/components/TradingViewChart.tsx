@@ -25,9 +25,6 @@ interface TVChartAPI {
 declare global {
   interface TVWidget {
     remove(): void
-    onChartReady(fn: () => void): void
-    chart(): TVChartAPI
-    activeChart(): TVChartAPI
   }
   interface Window {
     TradingView?: { widget: new (opts: Record<string, unknown>) => TVWidget }
@@ -57,10 +54,17 @@ export function tvSymbol(instrument: string): string {
   return s
 }
 
-function addOverlays(widget: TVWidget, cancelled: () => boolean, position?: Position, trades?: Trade[]) {
-  widget.onChartReady(() => {
+function buildOnChartReady(
+  getWidget:  () => TVWidget | null,
+  cancelled:  () => boolean,
+  position?:  Position,
+  trades?:    Trade[],
+): () => void {
+  return () => {
     if (cancelled()) return
-    const chart: TVChartAPI = (widget as any).activeChart?.() ?? widget.chart()
+    const w = getWidget()
+    if (!w) return
+    const chart: TVChartAPI = (w as any).activeChart?.() ?? (w as any).chart?.()
     if (!chart) return
 
     // ── current open position: entry line + SL line + TP line ──────────────
@@ -143,7 +147,7 @@ function addOverlays(widget: TVWidget, cancelled: () => boolean, position?: Posi
         } catch {}
       }
     })
-  })
+  }
 }
 
 type TVStudy = string | { id: string; inputs?: Record<string, unknown> }
@@ -189,8 +193,14 @@ export function TradingViewChart({
         save_image:        false,
         container_id:      id,
         ...(studies && studies.length > 0 ? { studies } : {}),
+        // onChartReady is the constructor-option form supported by the free widget.
+        onChartReady: buildOnChartReady(
+          () => widget,
+          () => cancelledFlag,
+          overlaysRef.current.position,
+          overlaysRef.current.trades,
+        ),
       })
-      addOverlays(widget, cancelled, overlaysRef.current.position, overlaysRef.current.trades)
     })
 
     return () => {
