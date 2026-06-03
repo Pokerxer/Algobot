@@ -117,10 +117,10 @@ class RiskManager:
         _min_pips: dict[str, float] = {
             "XAU":  800,   # gold:   $8 min  (800 pips × $0.01) — M15 ATR ~$10-25
             "XAG":   80,   # silver: $0.08 min (80 pips × $0.001) — M15 ATR ~$0.15-0.35
-            "US5":  500,   # US500:  $5 min  (500 × $0.01) — M15 ATR ~$8-20
+            "US5": 1500,   # US500:  $15 min (1500 × $0.01) — $5 was swept in 60s; needs room
             "UST": 1500,   # USTEC:  $15 min (1500 × $0.01) — M15 ATR ~$20-50
             "NAS": 1500,   # NAS100: same as USTEC
-            "US3":  200,   # US30:   $20 min (200 × $0.10) — M15 ATR ~$30-80
+            "US3":  500,   # US30:   $50 min (500  × $0.10) — M15 ATR ~$30-80
             "JPY":    8,   # JPY pairs: 8 pips — M15 ATR ~20-35 pips
             "BTC":  150,   # BTC:  $150 min (150 × $1.0) — M15 ATR ~$200-400
             "ETH":   60,   # ETH:  $6 min  (60 × $0.10)  — M15 ATR ~$10-20
