@@ -105,15 +105,9 @@ class TradingBot:
         equity  = float(account.get("equity",  balance))
         self._last_balance = balance  # always cache the latest
 
-        # Heartbeat: write live balance to bot_status every cycle
-        self._db.update_bot_status(
-            "RUNNING",
-            balance=balance,
-            equity=equity,
-            float_pnl=self._portfolio.unrealized_pnl(),
-        )
-
-        # Classify regimes and write snapshots
+        # Classify regimes — pure computation, no Supabase writes yet.
+        # All DB writes are deferred until after signals are evaluated and orders placed,
+        # so Supabase network issues can never block trade execution.
         regime_states: list[RegimeState] = []
         for instrument in self._cfg.instruments:
             df = await self._fetcher.fetch_ohlcv(
@@ -121,19 +115,12 @@ class TradingBot:
             )
             state = self._regime.classify(instrument, df)
             regime_states.append(state)
-            self._db.snapshot_regime(state)
-
-        # Per-instrument evaluation for the Insight view (why did/didn't we signal)
-        await self._write_evaluations(regime_states)
 
         # Detect positions closed by MT5 (SL/TP hit) → write to trades table
         await self._detect_closed_trades()
 
         # Trailing stops + time-based exit + live price sync + DB upsert
         await self._manage_positions()
-
-        # Daily performance summary (writes when day rolls over)
-        await self._write_daily_summary_if_new_day(balance)
 
         # Correlation matrix from cached H1 closes
         corr_matrix = self._compute_correlation_matrix()
@@ -322,6 +309,19 @@ class TradingBot:
                 else:
                     log.warning("LB order REJECTED for %s: %s",
                                 state.instrument, result.error)
+
+        # ── deferred Supabase writes — happen AFTER all orders are placed ─────────
+        # Supabase network issues must never delay or block trade execution.
+        self._db.update_bot_status(
+            "RUNNING",
+            balance=balance,
+            equity=equity,
+            float_pnl=self._portfolio.unrealized_pnl(),
+        )
+        for state in regime_states:
+            self._db.snapshot_regime(state)
+        await self._write_evaluations(regime_states)
+        await self._write_daily_summary_if_new_day(balance)
 
     async def _write_evaluations(self, regime_states: list[RegimeState]) -> None:
         for state in regime_states:
