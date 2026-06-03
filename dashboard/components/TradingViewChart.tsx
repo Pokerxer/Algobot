@@ -20,6 +20,13 @@ interface TVChartAPI {
     point: { time: number; price?: number },
     opts: { shape: string; overrides?: Record<string, unknown>; text?: string }
   ): unknown
+  createStudy(
+    name: string,
+    forceOverlay: boolean,
+    lock: boolean,
+    inputs: Record<string, unknown>,
+    overrides?: Record<string, unknown>
+  ): unknown
 }
 
 declare global {
@@ -66,6 +73,10 @@ function buildOnChartReady(
     if (!w) return
     const chart: TVChartAPI = (w as any).activeChart?.() ?? (w as any).chart?.()
     if (!chart) return
+
+    // ── EMA 20 (default colour) + EMA 50 (purple) ──────────────────────────
+    try { chart.createStudy("Moving Average Exponential", true, false, { length: 20 }) } catch {}
+    try { chart.createStudy("Moving Average Exponential", true, false, { length: 50 }, { "Plot.color": "#A855F7" }) } catch {}
 
     // ── current open position: entry line + SL line + TP line ──────────────
     if (position) {

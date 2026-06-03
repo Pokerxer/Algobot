@@ -13,11 +13,11 @@ export type DrawerItem =
 // Fixed indicator set matching the bot's actual calculations.
 // EMA 20 = fast touch line (momentum), EMA 50 = slow trend line,
 // RSI 14 = momentum/mean-reversion filter, ADX 14 = regime strength.
+// EMAs are added programmatically in onChartReady (via createStudy) so their
+// individual colors can be set. RSI + ADX go through the studies array as usual.
 const CHART_STUDIES = [
-  { id: "MAExp@tv-basicstudies", inputs: { length: 20 } },
-  { id: "MAExp@tv-basicstudies", inputs: { length: 50 }, overrides: { "Plot.color": "#A855F7" } },
-  { id: "RSI@tv-basicstudies",   inputs: { length: 14 } },
-  { id: "ADX@tv-basicstudies",   inputs: { length: 14 } },
+  { id: "RSI@tv-basicstudies", inputs: { length: 14 } },
+  { id: "ADX@tv-basicstudies", inputs: { length: 14 } },
 ]
 
 function proximity(pos: Position): number {
