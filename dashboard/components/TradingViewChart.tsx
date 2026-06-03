@@ -74,10 +74,6 @@ function buildOnChartReady(
     const chart: TVChartAPI = (w as any).activeChart?.() ?? (w as any).chart?.()
     if (!chart) return
 
-    // ── EMA 20 (default colour) + EMA 50 (purple) ──────────────────────────
-    try { chart.createStudy("Moving Average Exponential", true, false, { length: 20 }) } catch {}
-    try { chart.createStudy("Moving Average Exponential", true, false, { length: 50 }, { "Plot.color": "#A855F7" }) } catch {}
-
     // ── current open position: entry line + SL line + TP line ──────────────
     if (position) {
       const isBuy   = position.direction === "BUY"
@@ -204,6 +200,13 @@ export function TradingViewChart({
         save_image:        false,
         container_id:      id,
         ...(studies && studies.length > 0 ? { studies } : {}),
+        // Instance-numbered selectors attempt independent per-study colour override.
+        // The free widget applies studies_overrides before studies render.
+        studies_overrides: {
+          "moving average exponential.1.plot.color": "#2962FF",
+          "moving average exponential.2.plot.color": "#A855F7",
+          "moving average exponential.2.plot.linewidth": 2,
+        },
         // onChartReady is the constructor-option form supported by the free widget.
         onChartReady: buildOnChartReady(
           () => widget,
