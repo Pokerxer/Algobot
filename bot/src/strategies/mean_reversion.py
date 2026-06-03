@@ -17,6 +17,24 @@ def _rsi_diverges_bullish(rsi_series: pd.Series, prior_idx: int) -> bool:
     return float(rsi_series.iloc[-1]) > float(rsi_series.iloc[prior_idx])
 
 
+# Per-instrument ATR stop multiplier for mean-reversion.
+# High-volatility instruments need more room — a 1×ATR stop on XAU or indices
+# is swept by normal noise within minutes. Forex is fine at 1×ATR.
+_ATR_STOP_MULTIPLIERS: dict[str, float] = {
+    "XAU": 1.5, "XAG": 1.5,
+    "US5": 2.0, "US3": 2.0, "UST": 2.0,
+    "BTC": 2.0, "ETH": 2.0,
+}
+
+
+def _atr_stop_mult(instrument: str) -> float:
+    clean = instrument.rstrip("m").upper()
+    for prefix, mult in _ATR_STOP_MULTIPLIERS.items():
+        if clean.startswith(prefix):
+            return mult
+    return 1.0   # forex default
+
+
 class MeanReversionStrategy(BaseStrategy):
     name = "mean_reversion"
 
@@ -76,10 +94,11 @@ class MeanReversionStrategy(BaseStrategy):
                     return None   # divergence check requires a known prior touch
                 if not _rsi_diverges_bullish(rsi, prior_idx):
                     return None   # RSI did not recover — no divergence
+            mult = _atr_stop_mult(regime.instrument)
             return Signal(
                 instrument=regime.instrument, direction=Direction.BUY,
                 entry_price=close,
-                stop_loss=close - atr_now,   # 1 ATR below entry — always below close
+                stop_loss=close - mult * atr_now,
                 take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )
@@ -94,10 +113,11 @@ class MeanReversionStrategy(BaseStrategy):
                 # Bearish divergence: RSI at second touch must be LOWER (less overbought)
                 if float(rsi.iloc[-1]) >= float(rsi.iloc[prior_idx]):
                     return None
+            mult = _atr_stop_mult(regime.instrument)
             return Signal(
                 instrument=regime.instrument, direction=Direction.SELL,
                 entry_price=close,
-                stop_loss=close + atr_now,   # 1 ATR above entry — always above close
+                stop_loss=close + mult * atr_now,
                 take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )

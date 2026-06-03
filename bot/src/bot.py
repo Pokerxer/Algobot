@@ -92,9 +92,18 @@ class TradingBot:
         self._close_attempted: set[int] = set()
 
         # Last signal time per (instrument, direction) — dedup guard.
-        # Prevents the same signal firing on consecutive cycles from the same bar.
         self._last_signal_time: dict[tuple[str, str], datetime] = {}
         self._signal_dedup_seconds: int = 300   # 5-minute window
+
+        # A: Loss cooldown — after an SL hit, block that instrument for 60 min.
+        # Prevents re-entering at the same invalidated level immediately.
+        self._sl_cooldown: dict[str, datetime] = {}
+        self._sl_cooldown_minutes: int = 60
+
+        # C: Max 2 same-direction losses per instrument per day.
+        # After losing twice on the same side, the market has rejected that setup — stop.
+        self._daily_sl_counts: dict[tuple[str, str], int] = {}
+        self._daily_sl_date: date = date.today()
 
     # ── main loop ────────────────────────────────────────────────────────────
 
@@ -178,6 +187,47 @@ class TradingBot:
                 continue
             signal = strategy.generate_signal(df, state)
             if signal is None:
+                continue
+
+            # A: Loss cooldown — skip instrument for 60 min after an SL hit.
+            cooldown_since = self._sl_cooldown.get(choice.instrument)
+            if cooldown_since is not None:
+                elapsed_min = (datetime.now(timezone.utc) - cooldown_since).total_seconds() / 60
+                if elapsed_min < self._sl_cooldown_minutes:
+                    log.info(
+                        "Cooldown: skipping %s (%.0f min remaining after SL)",
+                        choice.instrument, self._sl_cooldown_minutes - elapsed_min,
+                    )
+                    self._db.log_signal(signal, executed=False,
+                                        rejection_reason=f"loss cooldown ({self._sl_cooldown_minutes - elapsed_min:.0f} min remaining)")
+                    continue
+
+            # B: H4 trend filter for mean-reversion — don't enter MR against a strong H4 trend.
+            # XAU/USDJPY losses: bot bought/sold into structural H4 trends and got stopped.
+            if state.regime in (Regime.RANGING, Regime.CHOPPY):
+                opposing = "SELL" if signal.direction.value == "BUY" else "BUY"
+                if await self._h4_aligned(choice.instrument, opposing):
+                    log.info(
+                        "MR %s skipped: H4 trending against on %s",
+                        signal.direction.value, choice.instrument,
+                    )
+                    self._db.log_signal(signal, executed=False,
+                                        rejection_reason=f"H4 trending against MR {signal.direction.value}")
+                    continue
+
+            # C: Max 2 same-direction losses per instrument per day.
+            today = datetime.now(timezone.utc).date()
+            if today != self._daily_sl_date:
+                self._daily_sl_counts.clear()
+                self._daily_sl_date = today
+            loss_key = (signal.instrument, signal.direction.value)
+            if self._daily_sl_counts.get(loss_key, 0) >= 2:
+                log.info(
+                    "Max daily losses reached for %s %s — skipping",
+                    signal.instrument, signal.direction.value,
+                )
+                self._db.log_signal(signal, executed=False,
+                                    rejection_reason=f"max daily SL ({signal.direction.value}) reached for {signal.instrument}")
                 continue
 
             # Dedup: skip if same instrument+direction was signaled in the last 5 minutes.
@@ -399,6 +449,21 @@ class TradingBot:
             )
             if profit is not None:
                 self._accumulate_realized_pnl(profit)
+
+            # A + C: record losses for cooldown and daily loss-count tracking
+            if profit is not None and profit < 0:
+                now = datetime.now(timezone.utc)
+                self._sl_cooldown[pos.instrument] = now  # A: start 60-min cooldown
+                today = now.date()
+                if today != self._daily_sl_date:           # C: reset at midnight
+                    self._daily_sl_counts.clear()
+                    self._daily_sl_date = today
+                key = (pos.instrument, pos.direction.value)
+                self._daily_sl_counts[key] = self._daily_sl_counts.get(key, 0) + 1
+                log.info(
+                    "Loss recorded %s %s — cooldown started, daily SL count=%d",
+                    pos.instrument, pos.direction.value, self._daily_sl_counts[key],
+                )
 
             # Remove from positions table — trades table has the full record
             try:
