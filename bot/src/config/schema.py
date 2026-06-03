@@ -44,6 +44,7 @@ class MeanReversionStrategyConfig(BaseModel):
     require_double_touch: bool = False  # second band touch confirms entry (enable in prod)
     require_divergence: bool = False    # RSI must be less oversold at second touch (divergence)
     bb_expansion_filter: bool = False   # reject expanding bands (enable in prod via settings)
+    require_order_block: bool = True    # only enter at institutional OB zones (SMC filter)
 
 
 class LondonBreakoutStrategyConfig(BaseModel):

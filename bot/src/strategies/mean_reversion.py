@@ -2,6 +2,7 @@ from typing import Optional
 import pandas as pd
 import pandas_ta as ta
 from src.config.schema import MeanReversionStrategyConfig
+from src.indicators.order_blocks import price_at_bullish_ob, price_at_bearish_ob
 from src.models.regime import Regime, RegimeState
 from src.models.signal import Direction, Signal
 from src.regime.indicators import compute_atr
@@ -86,6 +87,8 @@ class MeanReversionStrategy(BaseStrategy):
             return None
 
         if close <= lower and rsi_now < self._cfg.rsi_oversold:
+            if self._cfg.require_order_block and not price_at_bullish_ob(df, close):
+                return None   # no institutional support at this level
             prior_idx = _prior_touch_idx("lower")
             if self._cfg.require_double_touch and prior_idx is None:
                 return None   # first touch only — wait for confirmation
@@ -104,6 +107,8 @@ class MeanReversionStrategy(BaseStrategy):
             )
 
         if close >= upper and rsi_now > self._cfg.rsi_overbought:
+            if self._cfg.require_order_block and not price_at_bearish_ob(df, close):
+                return None   # no institutional resistance at this level
             prior_idx = _prior_touch_idx("upper")
             if self._cfg.require_double_touch and prior_idx is None:
                 return None

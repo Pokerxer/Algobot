@@ -10,6 +10,7 @@ def test_load_default_config():
     assert cfg.regime.adx_period == 14
     assert cfg.regime.adx_trend_threshold == 28
     assert cfg.strategy.mean_reversion.require_double_touch is False
+    assert cfg.strategy.mean_reversion.require_order_block is True
     assert cfg.strategy.momentum.fast_ema == 20
 
 

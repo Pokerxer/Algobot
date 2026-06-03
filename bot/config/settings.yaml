@@ -36,6 +36,7 @@ strategy:
     require_double_touch: false
     require_divergence: false
     bb_expansion_filter: false
+    require_order_block: true   # SMC: only enter at institutional order block zones
 
   london_breakout:
     session_start_utc: 7
