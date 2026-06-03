@@ -1,5 +1,6 @@
 import pandas as pd
 from src.config.schema import RegimeConfig
+from src.indicators.choch import detect_recent_choch
 from src.models.regime import Regime, RegimeState
 from src.regime.indicators import compute_adx, compute_bb_width
 
@@ -28,6 +29,23 @@ class RegimeDetector:
         else:
             regime = Regime.CHOPPY
             confidence = 1.0 if width > width_90 else 0.5
+
+        # CHoCH supplement: if ADX says RANGING/CHOPPY but a recent Change of Character
+        # has fired on the H1 chart, the structural bias has already shifted — override.
+        # This prevents MR entries into a market that has changed character (e.g. XAU
+        # classified as RANGING while a bearish CHoCH was printing on H1).
+        if self._cfg.choch_supplement and regime in (Regime.RANGING, Regime.CHOPPY):
+            choch = detect_recent_choch(
+                df,
+                swing_length=self._cfg.choch_swing_length,
+                lookback=self._cfg.choch_lookback,
+            )
+            if choch == "bearish":
+                regime = Regime.TRENDING_DOWN
+                confidence = min(confidence + 0.2, 1.0)  # slight confidence boost
+            elif choch == "bullish":
+                regime = Regime.TRENDING_UP
+                confidence = min(confidence + 0.2, 1.0)
 
         return RegimeState(
             instrument=instrument, regime=regime, confidence=confidence,

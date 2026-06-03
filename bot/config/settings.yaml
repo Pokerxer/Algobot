@@ -18,6 +18,9 @@ regime:
   adx_range_threshold: 20
   bb_period: 20
   bb_std: 2
+  choch_supplement: true   # override RANGING/CHOPPY when a recent H1 CHoCH has fired
+  choch_lookback: 15       # bars — CHoCH BrokenIndex must be within this window
+  choch_swing_length: 10   # pivot sensitivity
 
 strategy:
   momentum:

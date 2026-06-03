@@ -19,7 +19,9 @@ def test_backtest_runs_end_to_end():
 def test_backtest_with_no_signals():
     cfg = AppConfig(
         account={"starting_balance": 1000}, instruments=["EURUSD"],
-        regime={"adx_trend_threshold": 100, "adx_range_threshold": 0},
+        # choch_supplement disabled so the extreme ADX thresholds actually force
+        # everything to RANGING and prevent any signals from firing
+        regime={"adx_trend_threshold": 100, "adx_range_threshold": 0, "choch_supplement": False},
     )
     result = BacktestRunner(cfg, CSVDataProvider(Path("tests/fixtures"))).run(
         instrument="EURUSD", timeframe="H1",

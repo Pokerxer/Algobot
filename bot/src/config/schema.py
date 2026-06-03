@@ -23,6 +23,9 @@ class RegimeConfig(BaseModel):
     adx_range_threshold: float = 20
     bb_period: int = 20
     bb_std: float = 2.0
+    choch_supplement: bool = True   # override RANGING/CHOPPY if a recent CHoCH has fired
+    choch_lookback: int = 15        # bars — CHoCH BrokenIndex must be within this window
+    choch_swing_length: int = 10    # pivot sensitivity for CHoCH swing detection
 
 
 class MomentumStrategyConfig(BaseModel):
