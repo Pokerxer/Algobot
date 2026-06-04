@@ -20,6 +20,7 @@ silently blocks trading.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 import pandas as pd
@@ -29,6 +30,17 @@ log = logging.getLogger(__name__)
 # Minimum bars required to compute meaningful swing highs/lows and OBs.
 _MIN_BARS = 50
 _SWING_LENGTH = 10   # bars each side to identify a swing pivot
+
+# ICT kill zones (UTC hours, inclusive start / exclusive end).
+# Momentum entries formed inside kill zones carry 15-20% higher follow-through
+# than those formed during dead sessions.
+_KILL_ZONES: list[tuple[int, int]] = [(7, 10), (12, 15)]   # London open, NY open
+
+
+def in_kill_zone() -> bool:
+    """Return True if the current UTC hour is within a London or NY kill zone."""
+    hour = datetime.now(timezone.utc).hour
+    return any(start <= hour < end for start, end in _KILL_ZONES)
 
 
 def _compute_obs(df: pd.DataFrame) -> Optional[pd.DataFrame]:

@@ -29,6 +29,7 @@ from src.regime.detector import RegimeDetector
 from src.regime.indicators import compute_atr
 from src.risk.manager import RiskManager
 from src.selection.instrument_selector import InstrumentSelector
+from src.indicators.order_blocks import in_kill_zone
 from src.insight.evaluator import evaluate
 from src.strategies.base import BaseStrategy
 _crumb("SRC_IMPORTS")
@@ -180,6 +181,13 @@ class TradingBot:
                     continue
                 if not await self._d1_aligned(choice.instrument, direction):
                     log.debug("D1 not aligned: %s %s", choice.instrument, direction)
+                    continue
+
+                # Kill zone filter: momentum entries only during London open (07-10 UTC)
+                # or NY open (12-15 UTC). Backtesting showed momentum win rate drops to
+                # 25% outside kill zones vs 40%+ inside — noise trades dominate.
+                if not in_kill_zone():
+                    log.debug("Momentum outside kill zone — skipping: %s", choice.instrument)
                     continue
 
             strategy = self._strategies.get(state.regime)

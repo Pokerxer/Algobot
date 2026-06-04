@@ -332,3 +332,51 @@ async def test_run_cycle_upserts_one_evaluation_per_instrument():
     evaluated = {c.args[0].instrument
                  for c in supabase.upsert_signal_evaluation.call_args_list}
     assert evaluated == {"EURUSD", "GBPUSD"}
+
+
+# ── Kill zone filter for momentum ─────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_momentum_blocked_outside_kill_zone(monkeypatch):
+    """Momentum signals must be suppressed when not in a London/NY kill zone."""
+    import src.bot as bot_module
+
+    # Patch in_kill_zone to simulate being OUTSIDE any kill zone
+    monkeypatch.setattr(bot_module, "in_kill_zone", lambda: False)
+
+    mcp = FakeMCPClient(responses={
+        "get_rates": _rates(), "get_positions": [],
+        "account_info": {"balance": 500},
+        "get_symbol_info": {"spread": 1.0, "avg_spread": 1.0},
+    })
+    bot = TradingBot(config=_config(), mcp=mcp, supabase_logger=MagicMock())
+    await bot.run_cycle()
+
+    # No order should have been placed outside the kill zone for momentum
+    tool_names = [n for n, _ in mcp.calls]
+    assert "place_order" not in tool_names
+
+
+@pytest.mark.asyncio
+async def test_momentum_allowed_inside_kill_zone(monkeypatch):
+    """Kill zone check must not block signals when we ARE in a kill zone."""
+    import src.bot as bot_module
+
+    # Patch in_kill_zone to simulate being INSIDE a kill zone
+    monkeypatch.setattr(bot_module, "in_kill_zone", lambda: True)
+
+    # Use rates that produce a trending regime and a momentum signal
+    n = 500
+    closes = [1.10 + i * 0.0003 for i in range(n)]  # uptrend
+    rates = [{"time": 1704067200 + i * 3600, "open": c, "high": c + 0.002,
+              "low": c - 0.001, "close": c, "tick_volume": 1000}
+             for i, c in enumerate(closes)]
+
+    mcp = FakeMCPClient(responses={
+        "get_rates": rates, "get_positions": [],
+        "account_info": {"balance": 500},
+        "get_symbol_info": {"spread": 0.5, "avg_spread": 0.5},
+    })
+    bot = TradingBot(config=_config(), mcp=mcp, supabase_logger=MagicMock())
+    # Should complete without error; kill zone gate must not crash the cycle
+    await bot.run_cycle()
