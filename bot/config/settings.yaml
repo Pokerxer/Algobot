@@ -2,7 +2,7 @@ account:
   starting_balance: 1500
   max_daily_drawdown_pct: 5
   max_concurrent_positions: 5
-  risk_per_trade_pct: 1.5
+  risk_per_trade_pct: 2.5
 
 # EURUSDm: mean-reversion only (routed inside bot logic)
 # US30m + US500m: correlated 0.92 — risk manager blocks same-direction dual positions
