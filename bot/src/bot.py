@@ -50,6 +50,11 @@ _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 # ATR stop multiplier of 1.5× gives enough room for its 200-pip daily range.
 _MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
 
+# Long-bias instruments — precious metals are in a secular uptrend; block momentum SELL.
+# Backtest: XAU had 2 SELL losses (−$75), XAG had 2 SELL losses (−$87). Zero SELL wins.
+# MR SELL at the upper band is still allowed; only trending-regime SELL is blocked.
+_LONG_BIAS: frozenset[str] = frozenset({"XAUUSDm", "XAGUSDm"})
+
 
 class TradingBot:
     def __init__(self, config: AppConfig, mcp: MCPClient, supabase_logger,
@@ -189,6 +194,13 @@ class TradingBot:
                 # 25% outside kill zones vs 40%+ inside — noise trades dominate.
                 if not in_kill_zone():
                     log.debug("Momentum outside kill zone — skipping: %s", choice.instrument)
+                    continue
+
+                # Long-bias block: precious metals (XAU/XAG) are in a secular uptrend.
+                # Backtest showed 4 momentum SELL losses, 0 SELL wins over 6 months.
+                # MR SELL at upper band (RANGING regime) is still permitted.
+                if choice.instrument in _LONG_BIAS and state.regime == Regime.TRENDING_DOWN:
+                    log.debug("Long-bias block: skipping SELL momentum on %s", choice.instrument)
                     continue
 
             strategy = self._strategies.get(state.regime)

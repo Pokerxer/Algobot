@@ -34,7 +34,7 @@ _SWING_LENGTH = 10   # bars each side to identify a swing pivot
 # ICT kill zones (UTC hours, inclusive start / exclusive end).
 # Momentum entries formed inside kill zones carry 15-20% higher follow-through
 # than those formed during dead sessions.
-_KILL_ZONES: list[tuple[int, int]] = [(7, 10), (12, 16)]   # London open, NY open (extended to 16 UTC = NYSE rush hour)
+_KILL_ZONES: list[tuple[int, int]] = [(7, 10), (12, 16)]   # London open, NY open extended
 
 
 def in_kill_zone() -> bool:

@@ -12,7 +12,7 @@ from src.risk.manager import RiskManager, _pip_spec
 from src.strategies.base import BaseStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
-from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY
+from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS
 
 
 @dataclass
@@ -178,14 +178,18 @@ class BacktestRunner:
                     equity.append(balance)
                     continue
 
-                # ── Fix 1: D1 alignment + kill zone check for momentum ──
+                # ── Fix 1: D1 alignment + kill zone + long-bias check for momentum ──
                 if state.regime in (Regime.TRENDING_UP, Regime.TRENDING_DOWN):
                     direction = "BUY" if state.regime == Regime.TRENDING_UP else "SELL"
                     if not self._d1_aligned(h1_window, direction):
                         equity.append(balance)
                         continue
-                    # Kill zone filter: momentum only during London/NY open
+                    # Kill zone filter
                     if not self._in_kill_zone_at(bar_time):
+                        equity.append(balance)
+                        continue
+                    # Long-bias block: no momentum SELL on precious metals
+                    if instrument in _LONG_BIAS and state.regime == Regime.TRENDING_DOWN:
                         equity.append(balance)
                         continue
 

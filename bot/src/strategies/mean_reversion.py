@@ -36,6 +36,12 @@ def _atr_stop_mult(instrument: str) -> float:
     return 1.0   # forex default
 
 
+# Instruments exempt from the liquidity sweep requirement.
+# These are volatile — on M15 their candles are wide enough that sweeps often complete
+# within a single bar, making the next-bar confirmation overly strict. Standard
+# band-touch (close <= lower) is sufficient with the OB filter still active.
+_SWEEP_EXEMPT: frozenset[str] = frozenset({"XAUUSDm", "XAGUSDm", "US500m", "US30m"})
+
 # Per-instrument BB std override for signal detection.
 # EUR is a tight-range pair — 2.0 std bands rarely get touched on M15.
 # 1.5 std narrows the bands, producing more band touches without changing
@@ -104,10 +110,13 @@ class MeanReversionStrategy(BaseStrategy):
             return None
 
         # BUY entry: band touch + RSI oversold.
-        # Liquidity sweep mode: require prev bar's low to have swept below the band
-        # and the current bar to close BACK ABOVE it — confirming institutional absorption.
-        # Standard mode: current close simply at/below the band.
-        if self._cfg.require_liquidity_sweep and len(df) >= 2:
+        # Liquidity sweep mode: require prev bar's low swept below the band and current
+        # bar closed back above (institutional absorption confirmed).
+        # Exempt instruments (XAU/XAG/US500/US30) use standard band touch — their M15
+        # candles are wide enough that sweep+recovery often completes within one bar,
+        # making the next-bar check overly restrictive.
+        sweep_required = self._cfg.require_liquidity_sweep and regime.instrument not in _SWEEP_EXEMPT
+        if sweep_required and len(df) >= 2:
             prev_low = float(df["low"].iloc[-2])
             buy_trigger = prev_low <= lower and close > lower
         else:
@@ -134,8 +143,7 @@ class MeanReversionStrategy(BaseStrategy):
             )
 
         # SELL entry: band touch + RSI overbought.
-        # Liquidity sweep mode: prev bar's high swept above the band, current bar closes back below.
-        if self._cfg.require_liquidity_sweep and len(df) >= 2:
+        if sweep_required and len(df) >= 2:
             prev_high = float(df["high"].iloc[-2])
             sell_trigger = prev_high >= upper and close < upper
         else:
