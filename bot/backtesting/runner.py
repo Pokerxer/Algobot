@@ -76,21 +76,17 @@ class BacktestRunner:
                 open=("open", "first"), high=("high", "max"),
                 low=("low", "min"), close=("close", "last"),
             ).dropna()
-            if len(d1) < BacktestRunner.D1_EMA_PERIOD + 10:
+            if len(d1) < BacktestRunner.D1_EMA_PERIOD + 5:
                 return True   # not enough history — fail open
             ema = ta.ema(d1["close"], length=BacktestRunner.D1_EMA_PERIOD)
             if ema is None or pd.isna(ema.iloc[-1]):
                 return True
             last_close = float(d1["close"].iloc[-1])
             last_ema   = float(ema.iloc[-1])
-            # Require EMA to be sloping in the trade direction — prevents entering
-            # when D1 is structurally wrong (e.g. EMA rising but close briefly dipped
-            # below it during a pullback, which would incorrectly allow SELL entries).
-            ema_slope = float(ema.iloc[-1]) - float(ema.iloc[-6])
             if direction == "BUY":
-                return last_close > last_ema and ema_slope > 0
+                return last_close > last_ema
             else:
-                return last_close < last_ema and ema_slope < 0
+                return last_close < last_ema
         except Exception:
             return True   # fail open
 
