@@ -2,7 +2,7 @@ from typing import Optional
 import pandas as pd
 import pandas_ta as ta
 from src.config.schema import MeanReversionStrategyConfig
-from src.indicators.order_blocks import price_at_bullish_ob, price_at_bearish_ob, in_kill_zone
+from src.indicators.order_blocks import price_at_bullish_ob, price_at_bearish_ob
 from src.models.regime import Regime, RegimeState
 from src.models.signal import Direction, Signal
 from src.regime.indicators import compute_atr
@@ -97,11 +97,8 @@ class MeanReversionStrategy(BaseStrategy):
             buy_trigger = close <= lower
 
         if buy_trigger and rsi_now < self._cfg.rsi_oversold:
-            if self._cfg.require_order_block:
-                # Stricter OB tolerance outside kill zones — only accept precise OB hits
-                ob_tol = 0.003 if in_kill_zone() else 0.0015
-                if not price_at_bullish_ob(df, close, instrument=regime.instrument, tolerance=ob_tol):
-                    return None   # no institutional support at this level
+            if self._cfg.require_order_block and not price_at_bullish_ob(df, close):
+                return None   # no institutional support at this level
             prior_idx = _prior_touch_idx("lower")
             if self._cfg.require_double_touch and prior_idx is None:
                 return None   # first touch only — wait for confirmation
@@ -128,10 +125,8 @@ class MeanReversionStrategy(BaseStrategy):
             sell_trigger = close >= upper
 
         if sell_trigger and rsi_now > self._cfg.rsi_overbought:
-            if self._cfg.require_order_block:
-                ob_tol = 0.003 if in_kill_zone() else 0.0015
-                if not price_at_bearish_ob(df, close, instrument=regime.instrument, tolerance=ob_tol):
-                    return None   # no institutional resistance at this level
+            if self._cfg.require_order_block and not price_at_bearish_ob(df, close):
+                return None   # no institutional resistance at this level
             prior_idx = _prior_touch_idx("upper")
             if self._cfg.require_double_touch and prior_idx is None:
                 return None
