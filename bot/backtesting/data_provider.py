@@ -9,7 +9,10 @@ class CSVDataProvider:
 
     def load(self, instrument: str, timeframe: str = "H1",
              start: Optional[str] = None, end: Optional[str] = None) -> pd.DataFrame:
-        path = self._dir / f"{instrument}.csv"
+        # Support both {instrument}_{timeframe}.csv and legacy {instrument}.csv
+        path = self._dir / f"{instrument}_{timeframe}.csv"
+        if not path.exists():
+            path = self._dir / f"{instrument}.csv"
         df = pd.read_csv(path)
         df["time"] = pd.to_datetime(df["time"], utc=True)
         df = df.set_index("time")

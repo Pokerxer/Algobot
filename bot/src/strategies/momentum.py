@@ -8,8 +8,9 @@ from src.regime.indicators import compute_atr, compute_adx
 from src.strategies.base import BaseStrategy
 
 # Minimum slow-EMA slope in ATR units over the 10-bar lookback.
-# Filters flat/grinding pseudo-trends without blocking genuine directional moves.
-_SLOPE_MIN_ATR: float = 0.05
+# 0.10 requires twice the slope of the original 0.05 — filters weak entries
+# that are "aligned" on D1 but entering on exhausted H1 momentum.
+_SLOPE_MIN_ATR: float = 0.10
 
 
 def _volume_confirms_bounce(df: pd.DataFrame, period: int = 20) -> bool:

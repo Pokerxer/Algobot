@@ -19,9 +19,13 @@ def test_backtest_runs_end_to_end():
 def test_backtest_with_no_signals():
     cfg = AppConfig(
         account={"starting_balance": 1000}, instruments=["EURUSD"],
-        # choch_supplement disabled so the extreme ADX thresholds actually force
-        # everything to RANGING and prevent any signals from firing
+        # Extreme ADX thresholds force CHOPPY; RSI thresholds set unreachably strict
+        # so MR (which now covers CHOPPY) also cannot fire.
         regime={"adx_trend_threshold": 100, "adx_range_threshold": 0, "choch_supplement": False},
+        strategy={
+            "mean_reversion": {"rsi_oversold": 1, "rsi_overbought": 99,
+                               "require_order_block": False, "require_liquidity_sweep": False},
+        },
     )
     result = BacktestRunner(cfg, CSVDataProvider(Path("tests/fixtures"))).run(
         instrument="EURUSD", timeframe="H1",
