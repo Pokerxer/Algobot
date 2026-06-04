@@ -40,7 +40,10 @@ def _atr_stop_mult(instrument: str) -> float:
 # These are volatile — on M15 their candles are wide enough that sweeps often complete
 # within a single bar, making the next-bar confirmation overly strict. Standard
 # band-touch (close <= lower) is sufficient with the OB filter still active.
-_SWEEP_EXEMPT: frozenset[str] = frozenset({"XAUUSDm", "XAGUSDm", "US500m", "US30m"})
+# XAUUSDm removed: gold's intraday MR had 25% win rate even with OB filter —
+# macro-driven moves mean band touches don't revert reliably. Keep sweep
+# requirement for gold so only high-conviction sweep-and-recover entries fire.
+_SWEEP_EXEMPT: frozenset[str] = frozenset({"XAGUSDm", "US500m", "US30m"})
 
 # Per-instrument BB std override for signal detection.
 # EUR is a tight-range pair — 2.0 std bands rarely get touched on M15.
