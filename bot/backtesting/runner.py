@@ -111,10 +111,27 @@ class BacktestRunner:
         equity = [balance]
         open_trade: Optional[dict] = None
 
+        # Live-bot state tracking
+        sl_cooldown: dict[str, pd.Timestamp] = {}      # loss cooldown per instrument
+        COOLDOWN_HOURS = 1                              # 60-min block after SL hit
+        day_start_balance = balance                     # for daily drawdown check
+        current_day: Optional[pd.Timestamp] = None
+
         for i in range(self.MIN_BARS_FOR_REGIME, len(h1)):
             h1_window = h1.iloc[: i + 1]
             bar = h1_window.iloc[-1]
             bar_time = h1_window.index[-1]
+
+            # ── daily drawdown reset and halt ──
+            bar_day = bar_time.normalize()
+            if current_day != bar_day:
+                current_day = bar_day
+                day_start_balance = balance
+            daily_pnl = balance - day_start_balance
+            max_dd = day_start_balance * (self._cfg.account.max_daily_drawdown_pct / 100)
+            if daily_pnl <= -max_dd and open_trade is None:
+                equity.append(balance)
+                continue   # daily drawdown limit hit — no new entries today
 
             # ── manage open trade ──
             if open_trade is not None:
@@ -132,9 +149,18 @@ class BacktestRunner:
                         strategy=open_trade["strategy"],
                         regime=open_trade["regime"],
                     ))
+                    # Record SL hit for cooldown (loss = SL hit in this model)
+                    if pnl < 0:
+                        sl_cooldown[instrument] = bar_time
                     open_trade = None
 
             if open_trade is None:
+                # ── loss cooldown check (mirrors A in run_cycle) ──
+                if instrument in sl_cooldown:
+                    hours_since = (bar_time - sl_cooldown[instrument]).total_seconds() / 3600
+                    if hours_since < COOLDOWN_HOURS:
+                        equity.append(balance)
+                        continue
                 # ── classify regime from H1 ──
                 state = self._regime.classify(instrument, h1_window)
 
@@ -176,7 +202,7 @@ class BacktestRunner:
                 if signal is not None:
                     decision = self._risk.evaluate(
                         signal=signal, balance=balance, open_positions=[],
-                        daily_pnl=0, correlation_matrix={}, spread_ratio=0.5,
+                        daily_pnl=daily_pnl, correlation_matrix={}, spread_ratio=0.5,
                     )
                     if decision.approved:
                         open_trade = {
