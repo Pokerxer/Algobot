@@ -12,6 +12,7 @@ from src.risk.manager import RiskManager, _pip_spec
 from src.strategies.base import BaseStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
+from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY
 
 
 @dataclass
@@ -136,6 +137,16 @@ class BacktestRunner:
             if open_trade is None:
                 # ── classify regime from H1 ──
                 state = self._regime.classify(instrument, h1_window)
+
+                # ── mandate check: mirrors _mandate_blocks() in TradingBot ──
+                # EURUSDm = mean-rev only; GBPJPYm/USTECm/BTC/ETH = momentum only
+                if instrument in _MEAN_REV_ONLY and state.regime in (Regime.TRENDING_UP, Regime.TRENDING_DOWN):
+                    equity.append(balance)
+                    continue
+                if instrument in _MOMENTUM_ONLY and state.regime in (Regime.RANGING, Regime.CHOPPY):
+                    equity.append(balance)
+                    continue
+
                 strategy = self._strategies.get(state.regime)
                 if not strategy:
                     equity.append(balance)
