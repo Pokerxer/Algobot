@@ -51,6 +51,16 @@ class BacktestRunner:
         }
         self._risk = RiskManager(config.account)
 
+    # ── Kill zone check using bar timestamp (not live clock) ─────────────────
+
+    _KILL_ZONES: list[tuple[int, int]] = [(7, 10), (12, 15)]  # London open, NY open
+
+    @classmethod
+    def _in_kill_zone_at(cls, bar_time: pd.Timestamp) -> bool:
+        """Return True if the bar's UTC hour falls within a kill zone."""
+        hour = bar_time.tz_convert("UTC").hour if bar_time.tzinfo else bar_time.hour
+        return any(start <= hour < end for start, end in cls._KILL_ZONES)
+
     # ── D1 alignment (Fix 1) ──────────────────────────────────────────────────
 
     @staticmethod
@@ -131,10 +141,14 @@ class BacktestRunner:
                     equity.append(balance)
                     continue
 
-                # ── Fix 1: D1 alignment check for momentum ──
+                # ── Fix 1: D1 alignment + kill zone check for momentum ──
                 if state.regime in (Regime.TRENDING_UP, Regime.TRENDING_DOWN):
                     direction = "BUY" if state.regime == Regime.TRENDING_UP else "SELL"
                     if not self._d1_aligned(h1_window, direction):
+                        equity.append(balance)
+                        continue
+                    # Kill zone filter: momentum only during London/NY open
+                    if not self._in_kill_zone_at(bar_time):
                         equity.append(balance)
                         continue
 
