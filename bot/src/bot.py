@@ -45,9 +45,10 @@ log = logging.getLogger(__name__)
 _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 
 # Momentum-only pairs — too volatile or gap-prone for reliable MR band-touch entries
-# GBPJPYm: 200+ pip daily range, MR stops blow out on normal noise
 # USTECm/BTC/ETH: gap and spike risk makes MR unreliable
-_MOMENTUM_ONLY: frozenset[str] = frozenset({"GBPJPYm", "USTECm", "BTCUSDm", "ETHUSDm"})
+# GBPJPYm removed: backtest showed MR returns +$88 in ranging conditions;
+# ATR stop multiplier of 1.5× gives enough room for its 200-pip daily range.
+_MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
 
 
 class TradingBot:

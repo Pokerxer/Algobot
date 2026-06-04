@@ -27,7 +27,7 @@ strategy:
     fast_ema: 20
     slow_ema: 50
     atr_stop_multiplier: 2.0    # 33% more room — fewer noise stop-outs
-    atr_target_multiplier: 4.0  # 2:1 R/R maintained with wider stop
+    atr_target_multiplier: 5.0  # 2.5:1 R/R — backtest shows 44% win rate, needs wider TP to grow profit
     rsi_period: 14
     rsi_midline: 50.0
 

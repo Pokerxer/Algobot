@@ -292,6 +292,13 @@ def test_ustec_still_momentum_only_in_ranging():
     assert TradingBot._mandate_blocks("USTECm", Regime.RANGING) is True
 
 
+def test_gbpjpy_now_allowed_mr_in_choppy():
+    """GBPJPYm was removed from MOMENTUM_ONLY — backtest showed MR returns
+    +$88 in ranging conditions with ATR-based stops providing enough room."""
+    assert TradingBot._mandate_blocks("GBPJPYm", Regime.CHOPPY) is False
+    assert TradingBot._mandate_blocks("GBPJPYm", Regime.RANGING) is False
+
+
 def test_mean_rev_only_pair_blocked_when_trending():
     assert TradingBot._mandate_blocks("EURUSDm", Regime.TRENDING_DOWN) is True
 
