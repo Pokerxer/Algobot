@@ -54,7 +54,7 @@ class BacktestRunner:
 
     # ── Kill zone check using bar timestamp (not live clock) ─────────────────
 
-    _KILL_ZONES: list[tuple[int, int]] = [(7, 10), (12, 15)]  # London open, NY open
+    _KILL_ZONES: list[tuple[int, int]] = [(7, 10), (12, 16)]  # London open, NY open extended
 
     @classmethod
     def _in_kill_zone_at(cls, bar_time: pd.Timestamp) -> bool:
@@ -76,17 +76,21 @@ class BacktestRunner:
                 open=("open", "first"), high=("high", "max"),
                 low=("low", "min"), close=("close", "last"),
             ).dropna()
-            if len(d1) < BacktestRunner.D1_EMA_PERIOD + 5:
+            if len(d1) < BacktestRunner.D1_EMA_PERIOD + 10:
                 return True   # not enough history — fail open
             ema = ta.ema(d1["close"], length=BacktestRunner.D1_EMA_PERIOD)
             if ema is None or pd.isna(ema.iloc[-1]):
                 return True
             last_close = float(d1["close"].iloc[-1])
             last_ema   = float(ema.iloc[-1])
+            # Require EMA to be sloping in the trade direction — prevents entering
+            # when D1 is structurally wrong (e.g. EMA rising but close briefly dipped
+            # below it during a pullback, which would incorrectly allow SELL entries).
+            ema_slope = float(ema.iloc[-1]) - float(ema.iloc[-6])
             if direction == "BUY":
-                return last_close > last_ema
+                return last_close > last_ema and ema_slope > 0
             else:
-                return last_close < last_ema
+                return last_close < last_ema and ema_slope < 0
         except Exception:
             return True   # fail open
 

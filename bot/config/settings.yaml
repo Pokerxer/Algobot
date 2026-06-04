@@ -29,7 +29,7 @@ strategy:
     atr_stop_multiplier: 2.0    # 33% more room — fewer noise stop-outs
     atr_target_multiplier: 5.0  # 2.5:1 R/R — backtest shows 44% win rate, needs wider TP to grow profit
     rsi_period: 14
-    rsi_midline: 50.0
+    rsi_midline: 45.0   # 45 catches early pullback entries; 50 was missing trend continuations
 
   mean_reversion:
     rsi_period: 14

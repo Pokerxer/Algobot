@@ -36,6 +36,23 @@ def _atr_stop_mult(instrument: str) -> float:
     return 1.0   # forex default
 
 
+# Per-instrument BB std override for signal detection.
+# EUR is a tight-range pair — 2.0 std bands rarely get touched on M15.
+# 1.5 std narrows the bands, producing more band touches without changing
+# the entry logic (OB + sweep still required).
+_BB_STD_OVERRIDES: dict[str, float] = {
+    "EURUSD": 1.5,   # EURUSDm — tight daily range, need narrower bands
+}
+
+
+def _bb_std_for(instrument: str, default: float) -> float:
+    clean = instrument.rstrip("m").upper()
+    for prefix, std in _BB_STD_OVERRIDES.items():
+        if clean.startswith(prefix):
+            return std
+    return default
+
+
 class MeanReversionStrategy(BaseStrategy):
     name = "mean_reversion"
 
@@ -47,7 +64,7 @@ class MeanReversionStrategy(BaseStrategy):
             return None
 
         rsi = ta.rsi(df["close"], length=self._cfg.rsi_period)
-        bb  = ta.bbands(df["close"], length=20, std=self._cfg.bb_std)
+        bb  = ta.bbands(df["close"], length=20, std=_bb_std_for(regime.instrument, self._cfg.bb_std))
         atr = compute_atr(df, period=14)
 
         if rsi is None or bb is None or atr is None:

@@ -760,15 +760,26 @@ class TradingBot:
             return True   # fail open — never block on error
 
     async def _d1_aligned(self, instrument: str, direction: str) -> bool:
-        """Return True if the D1 50-EMA direction matches the intended trade direction.
+        """Return True if the D1 50-EMA is both above/below close AND sloping correctly.
 
-        Adding D1 alignment on top of H4 alignment compounds the multi-timeframe filter:
-        H1 + H4 + D1 all agreeing yields ~63-70% win rate vs ~55-62% for H1 + H4 alone.
-        Fails open (returns True) if D1 data is unavailable.
+        The slope check prevents entering when price briefly crossed the EMA
+        during a pullback while the dominant trend is still intact (e.g. gold
+        dipping below D1 EMA50 during a pullback in a bull market, which would
+        otherwise allow a SELL entry).
         """
         try:
-            df_d1 = await self._fetcher.fetch_ohlcv(instrument, "D1", bars=100)
-            return self._ema_aligned(df_d1, length=50, direction=direction)
+            import pandas_ta as ta_local
+            df_d1 = await self._fetcher.fetch_ohlcv(instrument, "D1", bars=200)
+            ema = ta_local.ema(df_d1["close"], length=50)
+            if ema is None or ema.isna().iloc[-1]:
+                return True
+            last_close = float(df_d1["close"].iloc[-1])
+            last_ema   = float(ema.iloc[-1])
+            ema_slope  = float(ema.iloc[-1]) - float(ema.iloc[-6])
+            if direction == "BUY":
+                return last_close > last_ema and ema_slope > 0
+            else:
+                return last_close < last_ema and ema_slope < 0
         except Exception:
             return True   # fail open — never block on error
 
@@ -791,7 +802,7 @@ class TradingBot:
         "AUD": (0,  17),   # Sydney 22–07 UTC + London 07–17
         "NZD": (0,  17),
         "XAU": (1,  21),   # Asian 01–07 (mean rev) + London/NY 07–21 (momentum); 00:00 skipped (Sydney gap)
-        "XAG": (7,  21),
+        "XAG": (1,  21),   # Silver: include Asian session (01–07 UTC) for MR
         "US5": (12, 21),   # Pre-market 12–14 (mean rev) + NYSE 14–21 (momentum)
         "US3": (13, 21),
         "UST": (13, 21),   # USTEC: full NYSE session
