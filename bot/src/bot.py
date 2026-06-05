@@ -37,6 +37,7 @@ from src.strategies.london_breakout import LondonBreakoutStrategy
 _crumb("LONDON_BREAKOUT")
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
+from src.strategies.smc_gold import SMCGoldStrategy
 _crumb("ALL_STRATEGIES")
 
 log = logging.getLogger(__name__)
@@ -53,7 +54,11 @@ _MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
 # Long-bias instruments — precious metals are in a secular uptrend; block momentum SELL.
 # Backtest: XAU had 2 SELL losses (−$75), XAG had 2 SELL losses (−$87). Zero SELL wins.
 # MR SELL at the upper band is still allowed; only trending-regime SELL is blocked.
-_LONG_BIAS: frozenset[str] = frozenset({"XAUUSDm", "XAGUSDm"})
+# XAUUSDm removed — SMCGoldStrategy handles direction via D1.
+_LONG_BIAS: frozenset[str] = frozenset({"XAGUSDm"})
+
+# Instruments using dedicated SMC strategy instead of regime-based router
+_SMC_INSTRUMENTS: frozenset[str] = frozenset({"XAUUSDm"})
 
 
 class TradingBot:
@@ -76,6 +81,7 @@ class TradingBot:
         self._parallel_strategies: list[BaseStrategy] = [
             LondonBreakoutStrategy(config.strategy.london_breakout),
         ]
+        self._smc_gold = SMCGoldStrategy()
         self._risk = RiskManager(config.account)
         self._execution = ExecutionEngine(mcp)
         self._portfolio = PortfolioManager(mcp)
@@ -149,6 +155,46 @@ class TradingBot:
             regime_states, spread_ratios,
             recent_sharpe=self._compute_sharpe_by_instrument(),
         )
+
+        # ── SMC instrument pass (XAUUSDm) — bypass regime router ──────────
+        for _smc_inst in [i for i in self._cfg.instruments if i in _SMC_INSTRUMENTS]:
+            if not self._in_session(_smc_inst):
+                continue
+            _smc_df = await self._fetcher.fetch_ohlcv(
+                _smc_inst, self._cfg.timeframes.entry, bars=200)
+            _smc_state = next(s for s in regime_states if s.instrument == _smc_inst)
+
+            _cd = self._sl_cooldown.get(_smc_inst)
+            if _cd and (datetime.now(timezone.utc) - _cd).total_seconds() / 60 < self._sl_cooldown_minutes:
+                continue
+
+            _sig = self._smc_gold.generate_signal(_smc_df, _smc_state)
+            if _sig is None:
+                continue
+
+            if self._is_duplicate_signal(_sig):
+                continue
+            self._record_signal_time(_sig)
+
+            _decision = self._risk.evaluate(
+                signal=_sig, balance=balance,
+                open_positions=self._portfolio.positions,
+                daily_pnl=self._daily_pnl(),
+                correlation_matrix=corr_matrix,
+                spread_ratio=spread_ratios.get(_smc_inst, 1.0),
+            )
+            if not _decision.approved:
+                log.info("SMC XAU signal rejected: %s", _decision.reason)
+                self._db.log_signal(_sig, executed=False, rejection_reason=_decision.reason)
+                continue
+
+            _result = await self._execution.place_order(_sig, _decision.lot_size)
+            self._db.log_signal(_sig, executed=(_result.status == "FILLED"))
+            if _result.status == "FILLED":
+                log.info("SMC XAU order placed  #%s  %s  SL=%.2f  TP=%.2f",
+                         _result.ticket, _sig.direction.value, _sig.stop_loss, _sig.take_profit)
+            else:
+                log.warning("SMC XAU order REJECTED: %s", _result.error)
 
         # Signal evaluation and order placement
         for choice in selected:
