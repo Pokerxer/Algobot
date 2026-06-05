@@ -51,14 +51,11 @@ _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 # ATR stop multiplier of 1.5× gives enough room for its 200-pip daily range.
 _MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
 
-# Long-bias instruments — precious metals are in a secular uptrend; block momentum SELL.
-# Backtest: XAU had 2 SELL losses (−$75), XAG had 2 SELL losses (−$87). Zero SELL wins.
-# MR SELL at the upper band is still allowed; only trending-regime SELL is blocked.
-# XAUUSDm removed — SMCGoldStrategy handles direction via D1.
-_LONG_BIAS: frozenset[str] = frozenset({"XAGUSDm"})
+# Long-bias instruments — block momentum SELL on precious metals in secular uptrend.
+_LONG_BIAS: frozenset[str] = frozenset({"XAUUSDm", "XAGUSDm"})
 
-# Instruments using dedicated SMC strategy instead of regime-based router
-_SMC_INSTRUMENTS: frozenset[str] = frozenset({"XAUUSDm"})
+# SMC instruments — empty until SMCGoldStrategy is calibrated (backtest: -$64 net, 20% win)
+_SMC_INSTRUMENTS: frozenset[str] = frozenset()
 
 
 class TradingBot:
