@@ -46,10 +46,10 @@ log = logging.getLogger(__name__)
 _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 
 # Momentum-only pairs — too volatile or gap-prone for reliable MR band-touch entries
-# USTECm/BTC/ETH: gap and spike risk makes MR unreliable
-# GBPJPYm removed: backtest showed MR returns +$88 in ranging conditions;
-# ATR stop multiplier of 1.5× gives enough room for its 200-pip daily range.
-_MOMENTUM_ONLY: frozenset[str] = frozenset({"USTECm", "BTCUSDm", "ETHUSDm"})
+# XAUUSDm: MR entries lost in 8-month backtest (macro-driven moves ignore technical bands);
+#           only momentum BUY allowed (combined with _LONG_BIAS which blocks SELL).
+# USTECm/BTC/ETH: gap and spike risk makes MR unreliable.
+_MOMENTUM_ONLY: frozenset[str] = frozenset({"XAUUSDm", "USTECm", "BTCUSDm", "ETHUSDm"})
 
 # Long-bias instruments — block momentum SELL only on gold (secular uptrend).
 # XAGUSDm removed: silver has stronger bearish legs and bidirectional setups are valid.
@@ -57,6 +57,10 @@ _LONG_BIAS: frozenset[str] = frozenset({"XAUUSDm"})
 
 # SMC instruments — empty until SMCGoldStrategy is calibrated (backtest: -$64 net, 20% win)
 _SMC_INSTRUMENTS: frozenset[str] = frozenset()
+
+# US index instruments that also trade the afternoon session (15:30-17:00 UTC = 11:30am-1pm ET).
+# USTEC had 71% win rate with only 7 trades — extending the trading window generates more.
+_US_AFTERNOON_INSTRUMENTS: frozenset[str] = frozenset({"USTECm", "US500m", "US30m"})
 
 
 class TradingBot:
@@ -233,10 +237,11 @@ class TradingBot:
                     log.debug("D1 not aligned: %s %s", choice.instrument, direction)
                     continue
 
-                # Kill zone filter: momentum entries only during London open (07-10 UTC)
-                # or NY open (12-15 UTC). Backtesting showed momentum win rate drops to
-                # 25% outside kill zones vs 40%+ inside — noise trades dominate.
-                if not in_kill_zone():
+                # Kill zone filter: momentum entries during London/NY open, or the US afternoon
+                # session (15:30-17:00 UTC) for US index instruments which stay active post-open.
+                _hour = datetime.now(timezone.utc).hour
+                _afternoon = choice.instrument in _US_AFTERNOON_INSTRUMENTS and 15 <= _hour < 17
+                if not in_kill_zone() and not _afternoon:
                     log.debug("Momentum outside kill zone — skipping: %s", choice.instrument)
                     continue
 

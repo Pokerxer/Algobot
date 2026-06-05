@@ -13,7 +13,7 @@ from src.strategies.base import BaseStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.smc_gold import SMCGoldStrategy
-from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS, _SMC_INSTRUMENTS
+from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS, _SMC_INSTRUMENTS, _US_AFTERNOON_INSTRUMENTS
 
 
 @dataclass
@@ -227,8 +227,10 @@ class BacktestRunner:
                     if not self._d1_aligned(h1_window, direction):
                         equity.append(balance)
                         continue
-                    # Kill zone filter
-                    if not self._in_kill_zone_at(bar_time):
+                    # Kill zone filter (with US afternoon extension for index instruments)
+                    _bar_hour = bar_time.tz_convert("UTC").hour
+                    _afternoon = instrument in _US_AFTERNOON_INSTRUMENTS and 15 <= _bar_hour < 17
+                    if not self._in_kill_zone_at(bar_time) and not _afternoon:
                         equity.append(balance)
                         continue
                     # Long-bias block: no momentum SELL on precious metals

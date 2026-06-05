@@ -50,7 +50,8 @@ _SWEEP_EXEMPT: frozenset[str] = frozenset({"XAGUSDm", "US500m", "US30m"})
 # 1.5 std narrows the bands, producing more band touches without changing
 # the entry logic (OB + sweep still required).
 _BB_STD_OVERRIDES: dict[str, float] = {
-    "EURUSD": 1.5,   # EURUSDm — tight daily range, need narrower bands
+    # EURUSD reverted to 2.0 default — 1.5 std was generating entries in strong downtrends
+    # (all 4 eight-month backtest entries were losses in H2 2025 EUR bear market).
 }
 
 
