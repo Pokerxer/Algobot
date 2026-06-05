@@ -12,7 +12,8 @@ from src.risk.manager import RiskManager, _pip_spec
 from src.strategies.base import BaseStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
-from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS
+from src.strategies.smc_gold import SMCGoldStrategy
+from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS, _SMC_INSTRUMENTS
 
 
 @dataclass
@@ -44,6 +45,7 @@ class BacktestRunner:
         self._cfg = config
         self._dp = data_provider
         self._regime = RegimeDetector(config.regime)
+        self._smc_gold = SMCGoldStrategy()
         self._strategies: dict[Regime, BaseStrategy] = {
             Regime.TRENDING_UP:   MomentumStrategy(config.strategy.momentum),
             Regime.TRENDING_DOWN: MomentumStrategy(config.strategy.momentum),
@@ -161,6 +163,47 @@ class BacktestRunner:
                     if hours_since < COOLDOWN_HOURS:
                         equity.append(balance)
                         continue
+
+                # ── SMC instrument pass (mirrors bot.py _SMC_INSTRUMENTS) ──
+                if instrument in _SMC_INSTRUMENTS:
+                    if use_m15:
+                        smc_window = m15[m15.index <= bar_time].tail(200)
+                        if len(smc_window) < 50:
+                            equity.append(balance)
+                            continue
+                    else:
+                        smc_window = h1_window
+                    from src.models.regime import RegimeState
+                    smc_state = RegimeState(instrument=instrument,
+                                           regime=Regime.RANGING, confidence=0.5)
+                    # in_kill_zone uses live time — patch with bar time for backtest
+                    import unittest.mock as _mock
+                    _bar_hour = bar_time.tz_convert("UTC").hour
+                    _in_kz = any(s <= _bar_hour < e for s, e in [(7, 10), (12, 16)])
+                    with _mock.patch("src.strategies.smc_gold.in_kill_zone",
+                                     return_value=_in_kz):
+                        signal = self._smc_gold.generate_signal(smc_window, smc_state)
+                    if signal is not None:
+                        decision = self._risk.evaluate(
+                            signal=signal, balance=balance, open_positions=[],
+                            daily_pnl=daily_pnl, correlation_matrix={}, spread_ratio=0.5,
+                        )
+                        if decision.approved:
+                            open_trade = {
+                                "instrument": instrument,
+                                "direction": signal.direction.value,
+                                "entry_time": bar.name,
+                                "entry_price": signal.entry_price,
+                                "stop_loss": signal.stop_loss,
+                                "take_profit": signal.take_profit,
+                                "lot_size": decision.lot_size,
+                                "strategy": signal.strategy,
+                                "regime": "smc_gold",
+                                "exit_price": None,
+                            }
+                    equity.append(balance)
+                    continue
+
                 # ── classify regime from H1 ──
                 state = self._regime.classify(instrument, h1_window)
 
