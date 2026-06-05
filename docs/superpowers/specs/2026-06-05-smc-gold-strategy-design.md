@@ -16,15 +16,15 @@ Gold's intraday price action follows ICT/SMC logic more reliably than mean-rever
 ## Goal
 
 A dedicated SMC-only entry model for XAUUSDm that:
-- Enters BUY only (long-bias preserved — no SELL entries)
+- Trades **both directions** based on market structure (OB direction + D1 alignment)
 - Uses Order Block + liquidity sweep as entry trigger
-- Targets buy-side liquidity (equal highs / external range highs) as TP
+- BUY: targets buy-side liquidity (equal highs / external range highs) as TP
+- SELL: targets sell-side liquidity (equal lows / external range lows) as TP
 - Falls back to 4×ATR if no liquidity pool is found
 - Fires only during London or NY open kill zones
 
 ## Non-goals (YAGNI)
 
-- No SELL entries on XAU
 - No CHoCH computation (adds ~2s latency per bar; OB+sweep is sufficient)
 - No London Breakout variant for XAU
 - No changes to other instruments
@@ -59,36 +59,50 @@ This sidesteps regime routing entirely for XAU.
 
 ## Entry Logic
 
-All conditions evaluated on M15 OHLCV data. All must pass:
+All conditions evaluated on M15 OHLCV data. Strategy evaluates **both BUY and SELL** independently each cycle — whichever OB is nearest and passes all conditions fires first.
 
 ### Condition 1: Kill zone active
 Current UTC hour must be in `[(7, 10), (12, 16)]` (London open, NY open).
 Uses existing `in_kill_zone()` from `src/indicators/order_blocks.py`.
 
-### Condition 2: Bullish OB at current price
-`price_at_bullish_ob(df, close, instrument="XAUUSDm")` returns True.
+### Condition 2: OB at current price
+- **BUY path:** `price_at_bullish_ob(df, close, instrument="XAUUSDm")` → True
+- **SELL path:** `price_at_bearish_ob(df, close, instrument="XAUUSDm")` → True
+
 Uses existing OB wrapper with XAU swing_length=20, tolerance=0.003.
 
 ### Condition 3: Liquidity sweep confirmed
-`price_at_bullish_ob` returns True/False but not the OB coordinates. The sweep check needs the OB bottom. Implementation: call `_compute_obs(df, swing_length=20)` directly (internal helper from `order_blocks.py`) to get the nearest bullish OB's `Bottom` value, then:
-```
-prev_bar.low <= OB_bottom            # swept below (stop-hunt below equal lows)
-current_bar.close > OB_bottom        # recovered back above OB
-```
-This is the ICT "stop hunt and reverse" — institutions grab stops below equal lows / OB support, then reverse. The OB condition (Condition 2) still filters first; the sweep check refines timing.
+Call `_compute_obs(df, swing_length=20)` directly to get the OB boundary coordinates, then:
 
-### Condition 4: D1 structure bullish
-Resample M15 df to D1, compute 50-EMA. `close > D1_EMA50`.
-Uses existing `_ema_aligned` helper pattern.
+**BUY sweep:**
+```
+prev_bar.low  <= bullish_OB_bottom   # stop-hunt below equal lows / OB support
+current_close >  bullish_OB_bottom   # recovered back above OB
+```
 
-If all four pass → generate BUY signal.
+**SELL sweep:**
+```
+prev_bar.high >= bearish_OB_top      # stop-hunt above equal highs / OB resistance
+current_close <  bearish_OB_top      # rejected back below OB
+```
+
+### Condition 4: D1 structural alignment
+Resample M15 df to D1, compute 50-EMA:
+- **BUY:** `close > D1_EMA50` (D1 bullish)
+- **SELL:** `close < D1_EMA50` (D1 bearish)
+
+This replaces the old long-bias block — market direction is determined by D1 structure, not a hardcoded bias. If D1 is bullish, only BUY setups fire. If D1 is bearish, only SELL setups fire.
+
+If all four pass for a given direction → generate signal in that direction.
 
 ## Take-Profit
 
-Primary: compute `smc.liquidity(df, swing_highs_lows(df, swing_length=10))`.
-Find nearest **buy-side liquidity pool** (level above current close where equal highs or significant swing highs cluster). Use that level as TP.
+Compute `smc.liquidity(df, swing_highs_lows(df, swing_length=10))`.
 
-Fallback: if no buy-side liquidity found within `5 × ATR` above entry, use `entry + 4 × ATR`.
+- **BUY TP:** nearest **buy-side liquidity** above entry (equal highs / external swing high). If none found within `5 × ATR`, fallback to `entry + 4 × ATR`.
+- **SELL TP:** nearest **sell-side liquidity** below entry (equal lows / external swing low). If none found within `5 × ATR`, fallback to `entry - 4 × ATR`.
+
+The SMC library returns liquidity zones with their price level and type (buy-side / sell-side). Filter for the correct side and take the nearest one above (BUY) or below (SELL) the entry price.
 
 ## Stop-Loss
 
@@ -115,5 +129,5 @@ Placed below the OB bottom with room for gold's volatility.
 | File | Change |
 |---|---|
 | `bot/src/strategies/smc_gold.py` | New — SMCGoldStrategy class |
-| `bot/src/bot.py` | Add `_SMC_INSTRUMENTS`, SMC-specific pass in `run_cycle` |
+| `bot/src/bot.py` | Add `_SMC_INSTRUMENTS`, SMC-specific pass in `run_cycle`; remove XAUUSDm from `_LONG_BIAS` (D1 alignment now handles direction) |
 | `bot/tests/test_smc_gold_strategy.py` | New — unit tests |
