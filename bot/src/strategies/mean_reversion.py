@@ -138,10 +138,14 @@ class MeanReversionStrategy(BaseStrategy):
                 if not _rsi_diverges_bullish(rsi, prior_idx):
                     return None   # RSI did not recover — no divergence
             mult = _atr_stop_mult(regime.instrument)
+            sl_dist = mult * atr_now
+            tp_dist = middle - close
+            if tp_dist < self._cfg.min_rr * sl_dist:
+                return None  # R:R too poor — BB middle too close relative to ATR stop
             return Signal(
                 instrument=regime.instrument, direction=Direction.BUY,
                 entry_price=close,
-                stop_loss=close - mult * atr_now,
+                stop_loss=close - sl_dist,
                 take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )
@@ -166,10 +170,14 @@ class MeanReversionStrategy(BaseStrategy):
                 if float(rsi.iloc[-1]) >= float(rsi.iloc[prior_idx]):
                     return None
             mult = _atr_stop_mult(regime.instrument)
+            sl_dist = mult * atr_now
+            tp_dist = close - middle
+            if tp_dist < self._cfg.min_rr * sl_dist:
+                return None  # R:R too poor — BB middle too close relative to ATR stop
             return Signal(
                 instrument=regime.instrument, direction=Direction.SELL,
                 entry_price=close,
-                stop_loss=close + mult * atr_now,
+                stop_loss=close + sl_dist,
                 take_profit=middle,
                 confidence=regime.confidence, regime=regime.regime, strategy=self.name,
             )

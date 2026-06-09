@@ -49,6 +49,7 @@ class MeanReversionStrategyConfig(BaseModel):
     bb_expansion_filter: bool = False   # reject expanding bands (enable in prod via settings)
     require_order_block: bool = True    # only enter at institutional OB zones (SMC filter)
     require_liquidity_sweep: bool = True  # enter only after band is swept and price recovers
+    min_rr: float = 1.5                # minimum R:R — skip if distance to BB middle < min_rr × SL distance
 
 
 class LondonBreakoutStrategyConfig(BaseModel):
