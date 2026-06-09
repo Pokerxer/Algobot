@@ -13,7 +13,7 @@ from src.strategies.base import BaseStrategy
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.smc_gold import SMCGoldStrategy
-from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS, _SMC_INSTRUMENTS, _US_AFTERNOON_INSTRUMENTS
+from src.bot import _MEAN_REV_ONLY, _MOMENTUM_ONLY, _LONG_BIAS, _SMC_INSTRUMENTS, _US_AFTERNOON_INSTRUMENTS, _NO_MR_SELL
 
 
 @dataclass
@@ -216,6 +216,20 @@ class BacktestRunner:
                     equity.append(balance)
                     continue
 
+                # ── US index session regime gate: block MR during NYSE open ──
+                # Mirrors TradingBot._SESSION_REGIME_GATES for US3/US5.
+                if state.regime in (Regime.RANGING, Regime.CHOPPY):
+                    _bh = bar_time.tz_convert("UTC").hour if bar_time.tzinfo else bar_time.hour
+                    _us_mr_block: dict[str, tuple[int, int]] = {
+                        "US500m": (13, 17),  # pre-market + NYSE open
+                        "US30m":  (15, 17),  # NYSE open (15:00 = 11 trades, 0% win, -$373)
+                    }
+                    if instrument in _us_mr_block:
+                        _bs, _be = _us_mr_block[instrument]
+                        if _bs <= _bh < _be:
+                            equity.append(balance)
+                            continue
+
                 strategy = self._strategies.get(state.regime)
                 if not strategy:
                     equity.append(balance)
@@ -248,6 +262,12 @@ class BacktestRunner:
                     entry_window = h1_window
 
                 signal = strategy.generate_signal(entry_window, state)
+                # MR SELL block: mirrors _NO_MR_SELL check in TradingBot.run_cycle
+                if (signal is not None
+                        and state.regime in (Regime.RANGING, Regime.CHOPPY)
+                        and signal.direction.value == "SELL"
+                        and instrument in _NO_MR_SELL):
+                    signal = None
                 if signal is not None:
                     decision = self._risk.evaluate(
                         signal=signal, balance=balance, open_positions=[],

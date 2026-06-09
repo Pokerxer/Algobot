@@ -51,9 +51,14 @@ _MEAN_REV_ONLY: frozenset[str] = frozenset({"EURUSDm"})
 # USTECm/BTC/ETH: gap and spike risk makes MR unreliable.
 _MOMENTUM_ONLY: frozenset[str] = frozenset({"XAUUSDm", "USTECm", "BTCUSDm", "ETHUSDm"})
 
-# Long-bias instruments — block momentum SELL only on gold (secular uptrend).
-# XAGUSDm removed: silver has stronger bearish legs and bidirectional setups are valid.
-_LONG_BIAS: frozenset[str] = frozenset({"XAUUSDm"})
+# Long-bias instruments — block momentum SELL (secular uptrend means TRENDING_DOWN entries lose).
+# XAGUSDm added: 6-month backtest showed 0 momentum SELL wins; structural bid is too strong.
+_LONG_BIAS: frozenset[str] = frozenset({"XAUUSDm", "XAGUSDm"})
+
+# Instruments where MR SELL entries are structurally unprofitable.
+# XAGUSDm: 33 MR SELL trades at 9.1% win rate, -$628 over 6 months — silver's bid overwhelms upper-band touches.
+# US500m: 9 MR SELL trades at 22.2% win rate, -$120 — equity structural upward drift turns SELL touches into traps.
+_NO_MR_SELL: frozenset[str] = frozenset({"XAGUSDm", "US500m"})
 
 # SMC instruments — empty until SMCGoldStrategy is calibrated (backtest: -$64 net, 20% win)
 _SMC_INSTRUMENTS: frozenset[str] = frozenset()
@@ -257,6 +262,14 @@ class TradingBot:
                 continue
             signal = strategy.generate_signal(df, state)
             if signal is None:
+                continue
+
+            # Block MR SELL on instruments with structural long bias (backtest: 6-month data).
+            if (state.regime in (Regime.RANGING, Regime.CHOPPY)
+                    and signal.direction.value == "SELL"
+                    and choice.instrument in _NO_MR_SELL):
+                log.debug("MR SELL block: skipping %s", choice.instrument)
+                self._db.log_signal(signal, executed=False, rejection_reason="MR SELL blocked — structural long bias")
                 continue
 
             # A: Loss cooldown — skip instrument for 60 min after an SL hit.
@@ -887,9 +900,25 @@ class TradingBot:
                                Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
         ],
         "US5": [
-            # Allow MR in all regimes throughout the session — on choppy days
-            # US500 mean-reverts at band edges just as reliably as it trends.
-            (12, 21, frozenset({Regime.RANGING, Regime.CHOPPY,
+            # Pre-market (12–13 UTC): MR allowed — quiet hour before pre-market volume picks up.
+            (12, 13, frozenset({Regime.RANGING, Regime.CHOPPY,
+                                Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
+            # 13–17 UTC: NYSE pre-market + open — MR SELL gets demolished at band touches
+            # as directional flows dominate; momentum only during this window.
+            # Backtest: US500m 13–16 UTC = -$180, 0–25% win across all 12 trades in that window.
+            (13, 17, frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
+            # NY afternoon (17–21 UTC): volatility drops, MR is reliable again.
+            (17, 21, frozenset({Regime.RANGING, Regime.CHOPPY,
+                                Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
+        ],
+        "US3": [
+            # 13–15 UTC: pre-market + early NY — MR allowed (US30m 13–14 UTC was neutral).
+            (13, 15, frozenset({Regime.RANGING, Regime.CHOPPY,
+                                Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
+            # 15–17 UTC: NYSE open — MR is catastrophic on US30 (15:00 = 11 trades, 0% win, -$373).
+            (15, 17, frozenset({Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
+            # NY afternoon (17–21 UTC): MR allowed again.
+            (17, 21, frozenset({Regime.RANGING, Regime.CHOPPY,
                                 Regime.TRENDING_UP, Regime.TRENDING_DOWN})),
         ],
         # Crypto: momentum only across all session hours.
