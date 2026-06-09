@@ -100,20 +100,21 @@ Write-Host "WMI workaround OK" -ForegroundColor Green
 # Credentials are baked in. To override, delete bot\.env and re-run the script.
 $ENV_FILE = "$BOT_DIR\.env"
 if (-not (Test-Path $ENV_FILE)) {
-    Write-Host "Writing .env..." -ForegroundColor Yellow
-    @"
-SUPABASE_URL=FILL_IN
-SUPABASE_SERVICE_KEY=FILL_IN
-ANTHROPIC_API_KEY=FILL_IN
-MT5_LOGIN=FILL_IN
-MT5_PASSWORD=FILL_IN
-MT5_SERVER=FILL_IN
-MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe
-MCP_SERVER_COMMAND=metatrader-mcp-server
-"@ | Out-File -FilePath $ENV_FILE -Encoding utf8 -NoNewline
-    Write-Host ".env written" -ForegroundColor Green
+    Write-Host "Writing .env template..." -ForegroundColor Yellow
+    $envLines = @(
+        "SUPABASE_URL=FILL_IN",
+        "SUPABASE_SERVICE_KEY=FILL_IN",
+        "ANTHROPIC_API_KEY=FILL_IN",
+        "MT5_LOGIN=FILL_IN",
+        "MT5_PASSWORD=FILL_IN",
+        "MT5_SERVER=FILL_IN",
+        "MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe",
+        "MCP_SERVER_COMMAND=metatrader-mcp-server"
+    )
+    $envLines | Out-File -FilePath $ENV_FILE -Encoding utf8
+    Write-Host ".env template written -- edit $ENV_FILE with your real credentials before starting the bot" -ForegroundColor Yellow
 } else {
-    Write-Host ".env already exists — skipping" -ForegroundColor Yellow
+    Write-Host ".env already exists -- skipping" -ForegroundColor Yellow
 }
 
 # ── 9. MT5 terminal ───────────────────────────────────────────────────────────
