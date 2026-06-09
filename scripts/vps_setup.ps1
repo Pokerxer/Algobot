@@ -124,7 +124,7 @@ if (-not (Test-Path $MT5_EXE)) {
     $MT5_INSTALLER = "$env:TEMP\mt5setup.exe"
     Invoke-WebRequest -Uri "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" `
         -OutFile $MT5_INSTALLER -UseBasicParsing
-    Write-Host "Launching MT5 installer — complete the GUI install, then press Enter here to continue." -ForegroundColor Cyan
+    Write-Host "Launching MT5 installer - complete the GUI install, then press Enter here to continue." -ForegroundColor Cyan
     Start-Process $MT5_INSTALLER -Wait
     Read-Host "  Press Enter once MT5 is installed and you have logged into your broker account"
 } else {
@@ -133,8 +133,8 @@ if (-not (Test-Path $MT5_EXE)) {
 
 # ── 10. Smoke-test the bot imports ───────────────────────────────────────────
 Write-Host "Testing bot imports..." -ForegroundColor Yellow
-$test = & $PYTHON -c "import pandas; import pandas_ta; from src.bot import TradingBot; print('imports OK')" 2>&1
-if ($test -match "imports OK") {
+$test = & $PYTHON -c "import pandas; import pandas_ta; from src.bot import TradingBot; print('imports OK')"
+if ($LASTEXITCODE -eq 0) {
     Write-Host "Import test OK" -ForegroundColor Green
 } else {
     Write-Host "Import test FAILED:" -ForegroundColor Red
@@ -175,7 +175,7 @@ Write-Host @"
 
 === Setup complete ===
 
-Service '$SERVICE' is registered and $(if ($svc.Status -eq 'Running') { 'RUNNING' } else { 'NOT running — check bot.err' }).
+Service '$SERVICE' is registered and $(if ($svc.Status -eq 'Running') { 'RUNNING' } else { 'NOT running - check bot.err' }).
 
 Useful commands:
   nssm status Algobot          # check status
