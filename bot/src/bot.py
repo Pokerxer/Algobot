@@ -503,6 +503,16 @@ class TradingBot:
                 ticket, pos.instrument, pos.direction.value,
                 pos.entry_price, exit_price or 0, profit or 0, duration,
             )
+            # Read regime from Supabase positions row before deleting it.
+            # MT5 doesn't store the bot's regime concept so _from_mcp always
+            # defaults to TRENDING_UP; the DB row has the correct value.
+            try:
+                _row = self._db._client.table("positions") \
+                    .select("regime").eq("ticket", ticket).execute()
+                regime_value = _row.data[0]["regime"] if _row.data else pos.regime.value
+            except Exception:
+                regime_value = pos.regime.value
+
             self._db.record_trade(
                 ticket=ticket,
                 instrument=pos.instrument,
@@ -514,7 +524,7 @@ class TradingBot:
                 opened_at=pos.opened_at.isoformat(),
                 closed_at=closed_at.isoformat() if closed_at else None,
                 strategy=pos.strategy,
-                regime=pos.regime.value,
+                regime=regime_value,
                 duration_minutes=duration,
             )
             if profit is not None:

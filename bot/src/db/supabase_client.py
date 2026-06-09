@@ -51,7 +51,7 @@ class SupabaseLogger:
         }, on_conflict="ticket")
 
     def record_trade(self, **fields: Any) -> None:
-        self._safe_insert("trades", fields)
+        self._safe_upsert("trades", fields, on_conflict="ticket")
 
     def upsert_signal_evaluation(self, ev: Evaluation) -> None:
         self._safe_upsert("signal_evaluations", {
