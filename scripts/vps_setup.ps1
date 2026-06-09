@@ -7,7 +7,7 @@
 #   2. Clones the repo
 #   3. Creates the venv and installs dependencies
 #   4. Applies the WMI workaround (sitecustomize.py)
-#   5. Prompts for your .env credentials
+#   5. Writes .env with baked-in credentials (delete bot\.env to re-run prompt)
 #   6. Installs MT5 terminal
 #   7. Registers the bot as a Windows service via NSSM (auto-start + auto-restart)
 
@@ -71,7 +71,7 @@ Write-Host "Repo OK at $INSTALL" -ForegroundColor Green
 Write-Host "Creating venv with Python 3.12..." -ForegroundColor Yellow
 Set-Location $BOT_DIR
 uv venv --python 3.12 .venv
-uv pip install -r requirements.txt
+uv pip install --python "$VENV\Scripts\python.exe" -r requirements.txt
 Write-Host "Venv OK" -ForegroundColor Green
 
 # ── 7. WMI workaround (sitecustomize.py) ─────────────────────────────────────
@@ -97,31 +97,23 @@ except Exception:
 Write-Host "WMI workaround OK" -ForegroundColor Green
 
 # ── 8. .env file ──────────────────────────────────────────────────────────────
+# Credentials are baked in. To override, delete bot\.env and re-run the script.
 $ENV_FILE = "$BOT_DIR\.env"
 if (-not (Test-Path $ENV_FILE)) {
-    Write-Host "`nEnter your credentials (these are saved to $ENV_FILE):" -ForegroundColor Cyan
-    $SUPA_URL  = Read-Host "  SUPABASE_URL       (https://xxxx.supabase.co)"
-    $SUPA_KEY  = Read-Host "  SUPABASE_SERVICE_KEY"
-    $ANTHROPIC = Read-Host "  ANTHROPIC_API_KEY  (leave blank if not using AI)"
-    $MT5_LOGIN = Read-Host "  MT5_LOGIN"
-    $MT5_PASS  = Read-Host "  MT5_PASSWORD"
-    $MT5_SRV   = Read-Host "  MT5_SERVER         (e.g. ICMarkets-Demo)"
-    $MT5_PATH  = Read-Host "  MT5_PATH           (default: C:\Program Files\MetaTrader 5\terminal64.exe)"
-    if ([string]::IsNullOrWhiteSpace($MT5_PATH)) { $MT5_PATH = "C:\Program Files\MetaTrader 5\terminal64.exe" }
-
+    Write-Host "Writing .env..." -ForegroundColor Yellow
     @"
-SUPABASE_URL=$SUPA_URL
-SUPABASE_SERVICE_KEY=$SUPA_KEY
-ANTHROPIC_API_KEY=$ANTHROPIC
-MT5_LOGIN=$MT5_LOGIN
-MT5_PASSWORD=$MT5_PASS
-MT5_SERVER=$MT5_SRV
-MT5_PATH=$MT5_PATH
+SUPABASE_URL=FILL_IN
+SUPABASE_SERVICE_KEY=FILL_IN
+ANTHROPIC_API_KEY=FILL_IN
+MT5_LOGIN=FILL_IN
+MT5_PASSWORD=FILL_IN
+MT5_SERVER=FILL_IN
+MT5_PATH=C:/Program Files/MetaTrader 5/terminal64.exe
 MCP_SERVER_COMMAND=metatrader-mcp-server
 "@ | Out-File -FilePath $ENV_FILE -Encoding utf8 -NoNewline
     Write-Host ".env written" -ForegroundColor Green
 } else {
-    Write-Host ".env already exists — skipping credential prompt" -ForegroundColor Yellow
+    Write-Host ".env already exists — skipping" -ForegroundColor Yellow
 }
 
 # ── 9. MT5 terminal ───────────────────────────────────────────────────────────
@@ -161,8 +153,9 @@ if ($existing) {
 }
 
 nssm install $SERVICE $PYTHON
-nssm set $SERVICE Arguments     "main.py"
+nssm set $SERVICE Arguments     "-u main.py"
 nssm set $SERVICE AppDirectory  $BOT_DIR
+nssm set $SERVICE AppEnvironmentExtra "PYTHONUNBUFFERED=1"
 nssm set $SERVICE AppStdout     "$BOT_DIR\bot.log"
 nssm set $SERVICE AppStderr     "$BOT_DIR\bot.err"
 nssm set $SERVICE AppRotateFiles 1
