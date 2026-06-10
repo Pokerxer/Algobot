@@ -96,8 +96,25 @@ class _SupabaseRest:
             self._method = "DELETE"
             self._hdrs["Prefer"] = "return=minimal"; return self
 
+        def _filter(self, col: str, op: str, val):
+            new = f"{op}.{val}"
+            existing = self._params.get(col)
+            if existing is None:
+                self._params[col] = new
+            elif isinstance(existing, list):
+                existing.append(new)
+            else:
+                self._params[col] = [existing, new]
+            return self
+
         def eq(self, col: str, val):
-            self._params[col] = f"eq.{val}"; return self
+            return self._filter(col, "eq", val)
+
+        def gte(self, col: str, val):
+            return self._filter(col, "gte", val)
+
+        def lt(self, col: str, val):
+            return self._filter(col, "lt", val)
 
         def execute(self):
             r = self._s.request(self._method, self._url,
