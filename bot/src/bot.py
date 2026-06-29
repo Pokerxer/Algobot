@@ -747,9 +747,17 @@ class TradingBot:
         if not pos.stop_loss:
             return None
 
-        # MR positions go to breakeven sooner (0.5× ATR) to eliminate give-back losses
-        # on band reversions that initially move favorably then snap back.
-        be_threshold = 0.5 * atr if pos.strategy == "mean_reversion" else 1.0 * atr
+        # MR: early BE (0.5× ATR) — band reversions snap back quickly.
+        # LB: no separate BE phase — original SL holds until 2× ATR profit, then ATR-trail.
+        #     Premature BE at 1× ATR was killing LB trades: breakout candles pull back ~1× ATR
+        #     during London open before continuing; BE-locking at that point stopped winners.
+        # All others: BE at 1× ATR.
+        if pos.strategy == "mean_reversion":
+            be_threshold = 0.5 * atr
+        elif pos.strategy == "london_breakout":
+            be_threshold = 2.0 * atr   # merges BE phase into ATR trail; no premature BE lock
+        else:
+            be_threshold = 1.0 * atr
 
         if pos.direction.value == "BUY":
             current = bid
