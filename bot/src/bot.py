@@ -707,6 +707,24 @@ class TradingBot:
                 self._close_attempted.add(pos.ticket)
             expired_tickets.add(pos.ticket)
 
+        # Dollar stop — close any position whose floating loss exceeds the cap
+        max_loss = self._cfg.execution.max_loss_per_trade_usd
+        if max_loss is not None:
+            for pos in positions:
+                if pos.ticket in expired_tickets or pos.ticket in self._close_attempted:
+                    continue
+                if pos.profit <= -max_loss:
+                    log.info(
+                        "Dollar stop  #%d %s  P&L=%.2f  breached -%.2f limit — closing",
+                        pos.ticket, pos.instrument, pos.profit, max_loss,
+                    )
+                    try:
+                        await self._execution.close_position(pos.ticket)
+                        self._close_attempted.add(pos.ticket)
+                    except Exception as exc:
+                        log.warning("Dollar stop close failed #%d: %s", pos.ticket, exc)
+                    expired_tickets.add(pos.ticket)
+
         # Trailing stops + live price upsert
         for pos in positions:
             if pos.ticket in expired_tickets:

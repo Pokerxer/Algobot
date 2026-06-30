@@ -61,3 +61,4 @@ ai:
 execution:
   max_holding_hours: 12
   max_spread_multiplier: 2.0
+  max_loss_per_trade_usd: 25.0

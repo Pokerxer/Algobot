@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Optional
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -83,6 +83,7 @@ class ExecutionConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     max_holding_hours: int = 24
     max_spread_multiplier: float = 2.0
+    max_loss_per_trade_usd: Optional[float] = None
 
 
 class AppConfig(BaseModel):
