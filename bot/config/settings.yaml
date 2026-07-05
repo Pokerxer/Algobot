@@ -52,6 +52,23 @@ strategy:
       - GBPUSDm
       - USDJPYm
 
+  master_trend:
+    pairs: [USTECm, US30m]
+    enable_long: true
+    enable_short: true
+    enable_mt_signals: true
+    enable_rejections: true
+    tp_pct_mt: 0.5
+    sl_pct_mt: 0.1
+    tp_pct_rej: 0.3
+    sl_pct_rej: 0.1
+    line_extension_bars: 25
+    be_ratio: 2.0
+    trail_start_rr: 3.0
+    trail_step_pips: 50.0
+    pip_size_fallback: 1.0
+    time_filter_enabled: false
+
 ai:
   enabled: false   # disabled until the AI validator is finished; bot runs on rules only
   confidence_threshold: 0.6
