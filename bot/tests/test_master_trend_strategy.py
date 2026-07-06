@@ -44,7 +44,7 @@ def test_mt_bull_signal_emits_buy_with_pct_tp_sl():
     assert sig.direction.value == "BUY"
     assert sig.strategy == "master_trend"
     close = float(df["close"].iloc[-1])
-    assert abs(sig.take_profit - close * 1.005) < 1e-6   # tp_pct_mt 0.5%
+    assert abs(sig.take_profit - close * 1.008) < 1e-6   # tp_pct_mt 0.8%
     assert abs(sig.stop_loss - close * 0.999) < 1e-6     # sl_pct_mt 0.1%
 
 
@@ -81,7 +81,7 @@ def test_bull_rejection_emits_buy():
     sig = _strat(enable_mt_signals=False).generate_signal(df2, _regime())
     assert sig is not None
     assert sig.direction.value == "BUY"
-    assert abs(sig.take_profit - close * 1.003) < 1e-6   # tp_pct_rej 0.3%
+    assert abs(sig.take_profit - close * 1.004) < 1e-6   # tp_pct_rej 0.4%
 
 
 def test_bear_rejection_from_bull_line():

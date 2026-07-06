@@ -855,8 +855,17 @@ class TradingBot:
     def _master_trend_trail(self, pos: Position, bid: float, ask: float,
                             pip_size: float) -> Optional[float]:
         """Pine-faithful exit for master_trend positions: SL->entry at be_ratio*R,
-        then trail trail_step_pips behind high-water once trail_start_rr*R reached."""
+        then trail trail_step_pips behind high-water once trail_start_rr*R reached.
+        BE/trail thresholds are per entry kind (MT signal vs rejection), inferred
+        from the position's TP distance so the choice survives bot restarts."""
         cfg = self._cfg.strategy.master_trend
+        if pos.take_profit and pos.entry_price:
+            tp_pct = abs(pos.take_profit - pos.entry_price) / pos.entry_price * 100
+            is_mt = abs(tp_pct - cfg.tp_pct_mt) < abs(tp_pct - cfg.tp_pct_rej)
+        else:
+            is_mt = False   # no TP to infer from — use the tighter rejection ladder
+        be_ratio = cfg.be_ratio_mt if is_mt else cfg.be_ratio_rej
+        trail_start_rr = cfg.trail_start_rr_mt if is_mt else cfg.trail_start_rr_rej
         r = self._mt_r_dist.get(pos.ticket)
         if r is None:
             # Recover R from the still-original SL (skip once SL is already at BE).
@@ -879,20 +888,20 @@ class TradingBot:
             hw = max(self._mt_high_water.get(pos.ticket, price), price)
             self._mt_high_water[pos.ticket] = hw
             peak_profit = hw - entry
-            if peak_profit >= cfg.trail_start_rr * r:
+            if peak_profit >= trail_start_rr * r:
                 trail = hw - step
                 return trail if pos.stop_loss is None or trail > pos.stop_loss else None
-            if peak_profit >= cfg.be_ratio * r:
+            if peak_profit >= be_ratio * r:
                 return entry if pos.stop_loss is None or entry > pos.stop_loss else None
         else:
             price = ask
             hw = min(self._mt_high_water.get(pos.ticket, price), price)
             self._mt_high_water[pos.ticket] = hw
             peak_profit = entry - hw
-            if peak_profit >= cfg.trail_start_rr * r:
+            if peak_profit >= trail_start_rr * r:
                 trail = hw + step
                 return trail if pos.stop_loss is None or trail < pos.stop_loss else None
-            if peak_profit >= cfg.be_ratio * r:
+            if peak_profit >= be_ratio * r:
                 return entry if pos.stop_loss is None or entry < pos.stop_loss else None
         return None
 

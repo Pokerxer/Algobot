@@ -60,13 +60,16 @@ strategy:
     enable_short: true
     enable_mt_signals: true
     enable_rejections: true
-    tp_pct_mt: 0.5
+    tp_pct_mt: 0.8
     sl_pct_mt: 0.1
-    tp_pct_rej: 0.3
+    tp_pct_rej: 0.4
     sl_pct_rej: 0.1
     line_extension_bars: 25
-    be_ratio: 2.0
-    trail_start_rr: 3.0
+    # per-kind exit ladders (kind inferred from TP distance — keep tp pcts distinct)
+    be_ratio_mt: 3.0
+    trail_start_rr_mt: 5.0
+    be_ratio_rej: 2.0
+    trail_start_rr_rej: 3.0
     trail_step_pips: 50.0
     pip_size_fallback: 1.0
     time_filter_enabled: false
