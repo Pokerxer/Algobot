@@ -1,6 +1,6 @@
 """Master Trend Strategy — Pine 'Master Trend Strategy v1.1' port.
 
-MT signal entries + stateful Rejection entries for USTECm / US30m on M15.
+MT signal entries + stateful Rejection entries for USTECm on M15.
 Chart visuals from the original script are intentionally not ported.
 """
 from __future__ import annotations

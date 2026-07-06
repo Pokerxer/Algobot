@@ -449,7 +449,7 @@ class TradingBot:
                     log.warning("LB order REJECTED for %s: %s",
                                 state.instrument, result.error)
 
-        # ── Master Trend parallel pass (USTECm / US30m, M15) ────────────────────
+        # ── Master Trend parallel pass (mt_cfg.pairs, M15) ──────────────────────
         mt_cfg = self._cfg.strategy.master_trend
         mt_pairs = [s for s in regime_states if s.instrument in set(mt_cfg.pairs)]
         for state in mt_pairs:

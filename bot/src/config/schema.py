@@ -65,7 +65,7 @@ class LondonBreakoutStrategyConfig(BaseModel):
 
 class MasterTrendStrategyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    pairs: list[str] = Field(default_factory=lambda: ["USTECm", "US30m"])
+    pairs: list[str] = Field(default_factory=lambda: ["USTECm"])
     enable_long: bool = True
     enable_short: bool = True
     enable_mt_signals: bool = True

@@ -53,7 +53,9 @@ strategy:
       - USDJPYm
 
   master_trend:
-    pairs: [USTECm, US30m]
+    # US30m dropped 2026-07-06: 4-month backtest lost on both signal kinds
+    # (48 trades, PF 0.69, net -$367); USTECm was +$1342 at PF 1.22.
+    pairs: [USTECm]
     enable_long: true
     enable_short: true
     enable_mt_signals: true
