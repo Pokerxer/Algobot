@@ -20,7 +20,7 @@ def _uptrend_df(n=820, start=15000.0, step=3.0):
     The final two bars force ema4-cross-above-ema5 by dipping then surging."""
     idx = pd.date_range("2026-06-01", periods=n, freq="15min", tz=timezone.utc)
     close = start + np.arange(n) * step
-    close[-2] -= step * 4          # dip: pulls ema4 toward ema5
+    close[-2] -= step * 10         # dip: pushes ema4 below ema5
     close[-1] = close[-2] + step * 12  # surge: ema4 crosses above ema5, big bull close
     high = close + 2.0
     low = close - 2.0
@@ -62,8 +62,9 @@ def test_bull_rejection_emits_buy():
     # down to that signal bar's open and closes back above it (and above ema750).
     df = _uptrend_df()
     c_pre = _compute(df)
-    # find the last MT bull signal bar in the valid window (last 25 bars)
-    sig_positions = [i for i in range(len(c_pre) - 26, len(c_pre) - 1)
+    # find the last MT bull signal bar still active as a line origin once the
+    # rejection bar below is appended (last 25 bars incl. the final bar)
+    sig_positions = [i for i in range(len(c_pre) - 26, len(c_pre))
                      if bool(c_pre["bull_sig"].iloc[i])]
     assert sig_positions, "fixture must contain an MT bull signal in the window"
     j = sig_positions[-1]
