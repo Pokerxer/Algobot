@@ -871,25 +871,28 @@ class TradingBot:
         entry = pos.entry_price
         step = cfg.trail_step_pips * pip_size
 
+        # Thresholds use the high-water (peak) profit, not the current price —
+        # Pine activates BE/trailing on the bar's high/low and keeps trailing
+        # active after activation even if price pulls back below the trigger.
         if pos.direction.value == "BUY":
             price = bid
             hw = max(self._mt_high_water.get(pos.ticket, price), price)
             self._mt_high_water[pos.ticket] = hw
-            profit = price - entry
-            if profit >= cfg.trail_start_rr * r:
+            peak_profit = hw - entry
+            if peak_profit >= cfg.trail_start_rr * r:
                 trail = hw - step
                 return trail if pos.stop_loss is None or trail > pos.stop_loss else None
-            if profit >= cfg.be_ratio * r:
+            if peak_profit >= cfg.be_ratio * r:
                 return entry if pos.stop_loss is None or entry > pos.stop_loss else None
         else:
             price = ask
             hw = min(self._mt_high_water.get(pos.ticket, price), price)
             self._mt_high_water[pos.ticket] = hw
-            profit = entry - price
-            if profit >= cfg.trail_start_rr * r:
+            peak_profit = entry - hw
+            if peak_profit >= cfg.trail_start_rr * r:
                 trail = hw + step
                 return trail if pos.stop_loss is None or trail < pos.stop_loss else None
-            if profit >= cfg.be_ratio * r:
+            if peak_profit >= cfg.be_ratio * r:
                 return entry if pos.stop_loss is None or entry < pos.stop_loss else None
         return None
 

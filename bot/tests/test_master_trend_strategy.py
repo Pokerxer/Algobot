@@ -83,6 +83,25 @@ def test_bull_rejection_emits_buy():
     assert abs(sig.take_profit - close * 1.003) < 1e-6   # tp_pct_rej 0.3%
 
 
+def test_bear_rejection_from_bull_line():
+    # Pine fidelity: ANY active MT line can trigger either rejection direction —
+    # a bull-drawn line must still yield a BEAR rejection when price closes
+    # below the line and below ema750.
+    n = 30
+    idx = pd.date_range("2026-06-01", periods=n, freq="15min", tz=timezone.utc)
+    c = pd.DataFrame({
+        "open": 100.0, "high": 101.0, "low": 99.0, "close": 100.0,
+        "ema750": 200.0,               # price trades far below ema750
+        "bull_sig": False, "bear_sig": False,
+    }, index=idx)
+    c.loc[c.index[-5], "bull_sig"] = True          # bull line at open=100.0
+    c.loc[c.index[-1], "high"] = 100.5             # wick pierces the line...
+    c.loc[c.index[-1], "close"] = 99.5             # ...but closes below it
+    sig = _strat(enable_mt_signals=False)._rejection(c, _regime())
+    assert sig is not None
+    assert sig.direction.value == "SELL"
+
+
 def test_no_rejection_when_close_below_line():
     df = _uptrend_df()
     new_idx = df.index[-1] + pd.Timedelta("15min")

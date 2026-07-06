@@ -151,18 +151,23 @@ class MasterTrendStrategy(BaseStrategy):
         bear = c["bear_sig"].to_numpy()
 
         # Iterate candidate line-origin bars newest-first (Pine order), within the
-        # active window (start_bar < last <= start_bar + extension).
+        # active window (start_bar < last <= start_bar + extension). Any MT line
+        # (bull- or bear-drawn) can trigger either rejection direction — Pine
+        # tests both conditions per line and breaks on the first detection;
+        # the long/short toggle gates the ORDER, not the detection.
         first = max(0, last - ext)
         for j in range(last - 1, first - 1, -1):
             if not (bull[j] or bear[j]):
                 continue
             line_price = float(opens[j])
-            if (bull[j] and cfg.enable_long
-                    and low <= line_price < close and close > ema750):
+            if low <= line_price < close and close > ema750:
+                if not cfg.enable_long:
+                    return None
                 return self._signal(regime, Direction.BUY, close,
                                     cfg.tp_pct_rej, cfg.sl_pct_rej)
-            if (bear[j] and cfg.enable_short
-                    and high >= line_price > close and close < ema750):
+            if high >= line_price > close and close < ema750:
+                if not cfg.enable_short:
+                    return None
                 return self._signal(regime, Direction.SELL, close,
                                     cfg.tp_pct_rej, cfg.sl_pct_rej)
         return None

@@ -48,6 +48,19 @@ def test_trailing_follows_50_pips_after_3r():
     assert new_sl is not None and abs(new_sl - 40070.0) < 1e-6
 
 
+def test_trailing_persists_after_pullback():
+    # Pine fidelity: once high-water reached 3R, trailing stays active even if
+    # the current price pulls back below the trigger level.
+    bot = _bot()
+    entry, sl = 40000.0, 39960.0            # R = 40
+    pos = _pos(entry, sl)
+    bot._mt_r_dist[pos.ticket] = 40.0
+    bot._mt_high_water[pos.ticket] = 40120.0  # earlier spike to exactly 3R
+    # price now back at 2.5R => trail must still apply from high-water
+    new_sl = bot._master_trend_trail(pos, bid=40100.0, ask=40100.0, pip_size=1.0)
+    assert new_sl is not None and abs(new_sl - 40070.0) < 1e-6
+
+
 def test_no_loosening_below_2r():
     bot = _bot()
     entry, sl = 40000.0, 39960.0
