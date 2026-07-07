@@ -10,7 +10,8 @@ from src.insight.evaluator import Evaluation
 log = logging.getLogger(__name__)
 
 _RESET_ERRORS = ("10054", "10053", "ConnectionReset", "forcibly closed", "BrokenPipe",
-                 "Server disconnected", "EOF", "timed out", "UNEXPECTED_EOF", "10060")
+                 "Server disconnected", "EOF", "timed out", "UNEXPECTED_EOF", "10060",
+                 "Connection aborted")
 
 
 class SupabaseLogger:

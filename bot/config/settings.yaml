@@ -51,6 +51,28 @@ strategy:
       - EURUSDm
       - GBPUSDm
 
+  master_trend:
+    # US30m dropped 2026-07-06: 4-month backtest lost on both signal kinds
+    # (48 trades, PF 0.69, net -$367); USTECm was +$1342 at PF 1.22.
+    pairs: [USTECm]
+    enable_long: true
+    enable_short: true
+    enable_mt_signals: true
+    enable_rejections: true
+    tp_pct_mt: 0.8
+    sl_pct_mt: 0.1
+    tp_pct_rej: 0.4
+    sl_pct_rej: 0.1
+    line_extension_bars: 25
+    # per-kind exit ladders (kind inferred from TP distance — keep tp pcts distinct)
+    be_ratio_mt: 3.0
+    trail_start_rr_mt: 5.0
+    be_ratio_rej: 2.0
+    trail_start_rr_rej: 3.0
+    trail_step_pips: 50.0
+    pip_size_fallback: 1.0
+    time_filter_enabled: false
+
 ai:
   enabled: false   # disabled until the AI validator is finished; bot runs on rules only
   confidence_threshold: 0.6

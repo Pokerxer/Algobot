@@ -63,6 +63,17 @@ def test_delete_position_deletes_by_ticket():
     chain.delete.return_value.eq.assert_called_with("ticket", 123)
 
 
+def test_record_trade_retries_after_connection_aborted_then_succeeds(caplog):
+    client, chain = _fake_client()
+    chain.upsert.return_value.execute.side_effect = [
+        ConnectionError("('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))"),
+        MagicMock(data=[{"id": 1}]),
+    ]
+    SupabaseLogger(client).record_trade(ticket=1, instrument="EURUSD")
+    assert chain.upsert.return_value.execute.call_count == 2
+    assert "Supabase write failed" not in caplog.text
+
+
 def test_upsert_signal_evaluation_upserts_by_instrument():
     from src.insight.evaluator import Evaluation
     client, chain = _fake_client()

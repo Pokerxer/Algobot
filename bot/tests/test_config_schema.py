@@ -52,3 +52,17 @@ def test_strategy_config_has_london_breakout_field():
     cfg = StrategyConfig()
     assert hasattr(cfg, "london_breakout")
     assert cfg.london_breakout.session_start_utc == 7
+
+
+def test_master_trend_config_defaults():
+    from src.config.schema import MasterTrendStrategyConfig, StrategyConfig
+    cfg = MasterTrendStrategyConfig()
+    assert cfg.pairs == ["USTECm"]
+    assert cfg.tp_pct_mt == 0.8 and cfg.sl_pct_mt == 0.1
+    assert cfg.tp_pct_rej == 0.4 and cfg.sl_pct_rej == 0.1
+    assert cfg.be_ratio_mt == 3.0 and cfg.trail_start_rr_mt == 5.0
+    assert cfg.be_ratio_rej == 2.0 and cfg.trail_start_rr_rej == 3.0
+    assert cfg.trail_step_pips == 50.0 and cfg.line_extension_bars == 25
+    assert cfg.enable_long and cfg.enable_short
+    assert cfg.enable_mt_signals and cfg.enable_rejections
+    assert StrategyConfig().master_trend.pairs == ["USTECm"]

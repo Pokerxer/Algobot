@@ -63,11 +63,35 @@ class LondonBreakoutStrategyConfig(BaseModel):
     ])
 
 
+class MasterTrendStrategyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    pairs: list[str] = Field(default_factory=lambda: ["USTECm"])
+    enable_long: bool = True
+    enable_short: bool = True
+    enable_mt_signals: bool = True
+    enable_rejections: bool = True
+    tp_pct_mt: float = 0.8
+    sl_pct_mt: float = 0.1
+    tp_pct_rej: float = 0.4
+    sl_pct_rej: float = 0.1
+    line_extension_bars: int = 25
+    # Exit ladders are per entry kind. The exit manager tells the kinds apart by
+    # which tp_pct the position's TP distance matches, so keep them distinct.
+    be_ratio_mt: float = 3.0
+    trail_start_rr_mt: float = 5.0
+    be_ratio_rej: float = 2.0
+    trail_start_rr_rej: float = 3.0
+    trail_step_pips: float = 50.0
+    pip_size_fallback: float = 1.0   # index point value when symbol mintick is unavailable
+    time_filter_enabled: bool = False
+
+
 class StrategyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     momentum: MomentumStrategyConfig = MomentumStrategyConfig()
     mean_reversion: MeanReversionStrategyConfig = MeanReversionStrategyConfig()
     london_breakout: LondonBreakoutStrategyConfig = LondonBreakoutStrategyConfig()
+    master_trend: MasterTrendStrategyConfig = MasterTrendStrategyConfig()
 
 
 class AIConfig(BaseModel):

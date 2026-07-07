@@ -38,6 +38,7 @@ _crumb("LONDON_BREAKOUT")
 from src.strategies.mean_reversion import MeanReversionStrategy
 from src.strategies.momentum import MomentumStrategy
 from src.strategies.smc_gold import SMCGoldStrategy
+from src.strategies.master_trend import MasterTrendStrategy
 _crumb("ALL_STRATEGIES")
 
 log = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ class TradingBot:
             LondonBreakoutStrategy(config.strategy.london_breakout),
         ]
         self._smc_gold = SMCGoldStrategy()
+        self._master_trend = MasterTrendStrategy(config.strategy.master_trend)
         self._risk = RiskManager(config.account)
         self._execution = ExecutionEngine(mcp)
         self._portfolio = PortfolioManager(mcp)
@@ -110,6 +112,10 @@ class TradingBot:
         # Prevents hammering MT5 with close calls every cycle when the market is
         # closed (e.g. after 21:00 UTC for US indices) or when the close fails silently.
         self._close_attempted: set[int] = set()
+
+        # Master Trend exit state (session-scoped, keyed by ticket)
+        self._mt_r_dist: dict[int, float] = {}      # original |entry - SL| distance (R)
+        self._mt_high_water: dict[int, float] = {}  # best price seen since fill
 
         # Last signal time per (instrument, direction) — dedup guard.
         self._last_signal_time: dict[tuple[str, str], datetime] = {}
@@ -443,6 +449,66 @@ class TradingBot:
                     log.warning("LB order REJECTED for %s: %s",
                                 state.instrument, result.error)
 
+        # ── Master Trend parallel pass (mt_cfg.pairs, M15) ──────────────────────
+        mt_cfg = self._cfg.strategy.master_trend
+        mt_pairs = [s for s in regime_states if s.instrument in set(mt_cfg.pairs)]
+        for state in mt_pairs:
+            if not self._in_session(state.instrument):
+                continue
+            mt_df = await self._fetcher.fetch_ohlcv(
+                state.instrument, self._cfg.timeframes.entry, bars=900,
+            )
+            if mt_df is None or mt_df.empty:
+                continue
+            signal = self._master_trend.generate_signal(mt_df, state)
+            if signal is None:
+                continue
+            if self._is_duplicate_signal(signal):
+                log.debug("MT duplicate suppressed: %s %s",
+                          signal.instrument, signal.direction.value)
+                continue
+            self._record_signal_time(signal)
+            decision = self._risk.evaluate(
+                signal=signal, balance=balance,
+                open_positions=self._portfolio.positions,
+                daily_pnl=self._daily_pnl(),
+                correlation_matrix=corr_matrix,
+                spread_ratio=spread_ratios.get(state.instrument, 1.0),
+            )
+            if not decision.approved:
+                log.info("MT signal rejected for %s: %s",
+                         state.instrument, decision.reason)
+                self._db.log_signal(signal, executed=False, rejection_reason=decision.reason)
+                continue
+            ai_decision = None
+            if self._ai is not None:
+                ai_decision = await self._ai.validate(signal, state, balance)
+                if ai_decision.action == "VETO":
+                    log.info("AI vetoed MT %s: %s", state.instrument, ai_decision.reasoning)
+                    self._db.log_signal(signal, executed=False,
+                                        ai_decision="VETO", ai_reasoning=ai_decision.reasoning)
+                    continue
+                if ai_decision.action == "MODIFY":
+                    if ai_decision.stop_loss is not None:
+                        signal = signal.model_copy(update={"stop_loss": ai_decision.stop_loss})
+                    if ai_decision.take_profit is not None:
+                        signal = signal.model_copy(update={"take_profit": ai_decision.take_profit})
+                    log.info("AI modified MT SL/TP for %s: %s",
+                             state.instrument, ai_decision.reasoning)
+            result = await self._execution.place_order(signal, decision.lot_size)
+            self._db.log_signal(
+                signal, executed=(result.status == "FILLED"),
+                ai_decision=ai_decision.action if ai_decision else None,
+                ai_reasoning=ai_decision.reasoning if ai_decision else None,
+            )
+            if result.status == "FILLED":
+                # Seed the exit-management R cache from the entry-time SL distance.
+                self._mt_r_dist[result.ticket] = abs(signal.entry_price - signal.stop_loss)
+                log.info("MT order placed  %s  #%s  SL=%.5f  TP=%.5f",
+                         state.instrument, result.ticket, signal.stop_loss, signal.take_profit)
+            else:
+                log.warning("MT order REJECTED for %s: %s", state.instrument, result.error)
+
         # ── deferred Supabase writes — happen AFTER all orders are placed ─────────
         # Supabase network issues must never delay or block trade execution.
         self._db.update_bot_status(
@@ -673,6 +739,14 @@ class TradingBot:
 
     async def _manage_positions(self) -> None:
         positions = self._portfolio.positions
+
+        # Drop Master Trend exit state for tickets no longer open.
+        _open = {p.ticket for p in positions}
+        for _t in list(self._mt_r_dist):
+            if _t not in _open:
+                self._mt_r_dist.pop(_t, None)
+                self._mt_high_water.pop(_t, None)
+
         if not positions:
             return
 
@@ -754,10 +828,15 @@ class TradingBot:
             if atr <= 0:
                 continue
 
-            new_sl = self._trail_sl(pos, atr, bid, ask)
+            if pos.strategy == "master_trend":
+                point = float(price_info.get("point",
+                              self._cfg.strategy.master_trend.pip_size_fallback))
+                new_sl = self._master_trend_trail(pos, bid, ask, point)
+            else:
+                new_sl = self._trail_sl(pos, atr, bid, ask)
             if new_sl is not None:
-                log.info("Trailing SL  #%d %s: %.5f → %.5f  (ATR=%.5f)",
-                         pos.ticket, pos.instrument, pos.stop_loss, new_sl, atr)
+                log.info("Trailing SL  #%d %s: %.5f → %.5f",
+                         pos.ticket, pos.instrument, pos.stop_loss or 0.0, new_sl)
                 await self._execution.modify_position(pos.ticket, stop_loss=new_sl)
 
     @staticmethod
@@ -797,6 +876,59 @@ class TradingBot:
                 be = round(pos.entry_price, 5)
                 return be if be < pos.stop_loss else None
 
+        return None
+
+    def _master_trend_trail(self, pos: Position, bid: float, ask: float,
+                            pip_size: float) -> Optional[float]:
+        """Pine-faithful exit for master_trend positions: SL->entry at be_ratio*R,
+        then trail trail_step_pips behind high-water once trail_start_rr*R reached.
+        BE/trail thresholds are per entry kind (MT signal vs rejection), inferred
+        from the position's TP distance so the choice survives bot restarts."""
+        cfg = self._cfg.strategy.master_trend
+        if pos.take_profit and pos.entry_price:
+            tp_pct = abs(pos.take_profit - pos.entry_price) / pos.entry_price * 100
+            is_mt = abs(tp_pct - cfg.tp_pct_mt) < abs(tp_pct - cfg.tp_pct_rej)
+        else:
+            is_mt = False   # no TP to infer from — use the tighter rejection ladder
+        be_ratio = cfg.be_ratio_mt if is_mt else cfg.be_ratio_rej
+        trail_start_rr = cfg.trail_start_rr_mt if is_mt else cfg.trail_start_rr_rej
+        r = self._mt_r_dist.get(pos.ticket)
+        if r is None:
+            # Recover R from the still-original SL (skip once SL is already at BE).
+            if pos.stop_loss and abs(pos.stop_loss - pos.entry_price) > 1e-9:
+                r = abs(pos.entry_price - pos.stop_loss)
+                self._mt_r_dist[pos.ticket] = r
+            else:
+                return None
+        if r <= 0:
+            return None
+
+        entry = pos.entry_price
+        step = cfg.trail_step_pips * pip_size
+
+        # Thresholds use the high-water (peak) profit, not the current price —
+        # Pine activates BE/trailing on the bar's high/low and keeps trailing
+        # active after activation even if price pulls back below the trigger.
+        if pos.direction.value == "BUY":
+            price = bid
+            hw = max(self._mt_high_water.get(pos.ticket, price), price)
+            self._mt_high_water[pos.ticket] = hw
+            peak_profit = hw - entry
+            if peak_profit >= trail_start_rr * r:
+                trail = hw - step
+                return trail if pos.stop_loss is None or trail > pos.stop_loss else None
+            if peak_profit >= be_ratio * r:
+                return entry if pos.stop_loss is None or entry > pos.stop_loss else None
+        else:
+            price = ask
+            hw = min(self._mt_high_water.get(pos.ticket, price), price)
+            self._mt_high_water[pos.ticket] = hw
+            peak_profit = entry - hw
+            if peak_profit >= trail_start_rr * r:
+                trail = hw + step
+                return trail if pos.stop_loss is None or trail < pos.stop_loss else None
+            if peak_profit >= be_ratio * r:
+                return entry if pos.stop_loss is None or entry < pos.stop_loss else None
         return None
 
     # ── helpers ───────────────────────────────────────────────────────────────
