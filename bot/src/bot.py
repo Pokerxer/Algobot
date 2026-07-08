@@ -1036,7 +1036,7 @@ class TradingBot:
         "XAG": (1,  21),   # Silver: include Asian session (01–07 UTC) for MR
         "US5": (12, 21),   # Pre-market 12–14 (mean rev) + NYSE 14–21 (momentum)
         "US3": (13, 21),
-        "UST": (13, 21),   # USTEC: full NYSE session
+        "UST": (7,  22),   # USTEC: Master Trend session gate widened to 07-22 UTC
         "NAS": (13, 21),
         "GER": (7,  17),   # Frankfurt/Xetra
         "UK1": (7,  16),   # London Stock Exchange
